@@ -6,6 +6,7 @@ window.ADULT_CONFIG = {
   cloudConfigVersion: 2,
   unsignedUploadPreset: 'Adult_Story',
   signedUpload: false,
+  customerApi: '/api/member',
   refreshSeconds: 30
 };
 // Explicit recovery mode for existing local data; never enabled on hosted sites.

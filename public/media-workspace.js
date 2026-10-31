@@ -1,4 +1,4 @@
-import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadCloudinary,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=6.2.0';
+import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadCloudinary,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=8.0.0';
 const MEDIA='application/x-adult-media',STORY='application/x-adult-story';
 export function createMediaWorkspace(o){
  const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],selected=new Set(),tasks=[];

@@ -1,0 +1,8 @@
+{
+  "name": "adult-stories-online",
+  "version": "8.2.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,9 +1,9 @@
-import {createDrafts} from './editor-drafts.js?v=8.0.0';
-import {audioPreview,isPrivateAudio,mountPrivateAudio} from './private-audio.js?v=8.0.0';
-import {importCloudBackup} from './cloud-import.js?v=8.0.0';
-import {createMediaWorkspace} from './media-workspace.js?v=8.0.0';
-import {CONFIG,online,$,$$,esc,overlayCSS,overlayDefault,safeUrl,getData,getBody,saveStory,removeStory,saveSite,saveAsset,updateAsset,removeAsset,uploadCloudinary,session,signIn,signOut,isAdmin,persistenceInfo,importLocalBackup} from './core.js?v=8.0.0';
-import {visualDefault,cloudSettings,visualFor,cropFor,applyPhoto,audioSeconds,clockDuration,automaticSlug,automaticPublishAt,measureAudio} from './studio.js?v=8.0.0';
+import {createDrafts} from './editor-drafts.js?v=8.2.0';
+import {audioPreview,isPrivateAudio,mountPrivateAudio} from './private-audio.js?v=8.2.0';
+import {importCloudBackup} from './cloud-import.js?v=8.2.0';
+import {createMediaWorkspace} from './media-workspace.js?v=8.2.0';
+import {CONFIG,online,$,$$,esc,overlayCSS,overlayDefault,safeUrl,getData,getBody,saveStory,removeStory,saveSite,saveAsset,updateAsset,removeAsset,uploadCloudinary,session,signIn,signOut,isAdmin,persistenceInfo,importLocalBackup} from './core.js?v=8.2.0';
+import {visualDefault,cloudSettings,visualFor,cropFor,applyPhoto,audioSeconds,clockDuration,automaticSlug,automaticPublishAt,measureAudio} from './studio.js?v=8.2.0';
 let mediaWorkspace=null;
 let data=null,active='overview',editing=null,returnSlot=null,editingAssetId=null,pendingImport=null;
 let storyOverlay=overlayDefault(),homeOverlay=overlayDefault(),themeDraft=visualDefault();
@@ -119,12 +119,12 @@ $('#saveDesign').addEventListener('click',async()=>{const button=$('#saveDesign'
 let previewTimer;
 function queuePreviews(){clearTimeout(previewTimer);previewTimer=setTimeout(renderPreviews,100)}
 function previewPayload(scope){
- const site={...homeDraft(),visual_theme:{...themeDraft}};let rows=allStories().map(s=>({...s}));const draft=formStory(false),currentId=editing?.id||'studio-draft';
- if(draft.title){const item={...draft,id:currentId,status:'published',publish_at:null};rows=rows.filter(s=>s.id!==currentId);rows.unshift(item)}
- return {type:'adult-studio-preview',data:{site,stories:rows,assets:data.assets,bodies:[]},view:previewViews[scope],storyId:draft.title?currentId:site.featured_story_id||rows[0]?.id};
+ const site=scope==='home'?homeDraft():scope==='design'?{...data.site,visual_theme:{...themeDraft}}:{...data.site};let rows=allStories().map(s=>({...s}));const draft=formStory(false),currentId=editing?.id||'studio-draft';
+ if(scope==='story'&&draft.title){const item={...draft,id:currentId,status:'published',publish_at:null};rows=rows.filter(s=>s.id!==currentId);rows.unshift(item)}
+ return {type:'adult-studio-preview',data:{site,stories:rows,assets:data.assets,bodies:[]},view:previewViews[scope],storyId:scope==='story'&&draft.title?currentId:site.featured_story_id||rows[0]?.id};
 }
-function fitPreview(scope){const frame=$(`[data-preview-frame="${scope}"]`),stage=frame.parentElement;if(!stage.clientWidth)return;const width=previewModes[scope]==='mobile'?390:1180,height=previewModes[scope]==='mobile'?800:840,scale=Math.min(1,stage.clientWidth/width);frame.style.width=width+'px';frame.style.height=height+'px';frame.style.transform=`scale(${scale})`;frame.style.left=Math.max(0,(stage.clientWidth-width*scale)/2)+'px';stage.style.height=Math.ceil(height*scale)+'px';frame.closest('.site-preview').querySelector('.preview-caption').textContent=`${width} px · ${previewModes[scope]==='mobile'?'Утас':'Desktop'} · Preview дотор scroll хийж болно.`;$$(`[data-preview-scope="${scope}"]`).forEach(b=>b.classList.toggle('active',b.dataset.viewport===previewModes[scope]))}
-function renderPreviews(){if(!data)return;for(const scope of ['story','home','design']){const frame=$(`[data-preview-frame="${scope}"]`);if(!frame.closest('[data-section]').classList.contains('active')||(scope==='story'&&$('#paneCover').hidden))continue;fitPreview(scope);if(!frame.getAttribute('src'))frame.src='index.html?studio=1&v=8.0.0'+(CONFIG.localContentMode?'&local=1':'');if(frame.dataset.ready==='yes')frame.contentWindow.postMessage(previewPayload(scope),location.origin)}}
+function fitPreview(scope){const frame=$(`[data-preview-frame="${scope}"]`),stage=frame.parentElement;if(!stage.clientWidth)return;const width=previewModes[scope]==='mobile'?390:window.innerWidth,height=previewModes[scope]==='mobile'?800:840,scale=Math.min(1,stage.clientWidth/width);frame.style.width=width+'px';frame.style.height=height+'px';frame.style.transform=`scale(${scale})`;frame.style.left=Math.max(0,(stage.clientWidth-width*scale)/2)+'px';stage.style.height=Math.ceil(height*scale)+'px';frame.closest('.site-preview').querySelector('.preview-caption').textContent=`${width} px · ${previewModes[scope]==='mobile'?'Утас':'Desktop'} · Preview дотор scroll хийж болно.`;$$(`[data-preview-scope="${scope}"]`).forEach(b=>b.classList.toggle('active',b.dataset.viewport===previewModes[scope]))}
+function renderPreviews(){if(!data)return;for(const scope of ['story','home','design']){const frame=$(`[data-preview-frame="${scope}"]`);if(!frame.closest('[data-section]').classList.contains('active')||(scope==='story'&&$('#paneCover').hidden))continue;fitPreview(scope);if(!frame.getAttribute('src'))frame.src='index.html?studio=1&v=8.2.0'+(CONFIG.localContentMode?'&local=1':'');if(frame.dataset.ready==='yes')frame.contentWindow.postMessage(previewPayload(scope),location.origin)}}
 $$('[data-viewport]').forEach(b=>b.addEventListener('click',()=>{const scope=b.dataset.previewScope;previewModes[scope]=b.dataset.viewport;if(scope!=='design'){cropDevices[scope]=b.dataset.viewport;drawCropControls(scope)}queuePreviews()}));
 $$('[data-preview-view]').forEach(select=>{select.value=previewViews[select.dataset.previewView];select.addEventListener('change',()=>{previewViews[select.dataset.previewView]=select.value;queuePreviews()})});
 window.addEventListener('message',event=>{if(event.origin!==location.origin||event.data?.type!=='adult-studio-ready')return;const frame=$$('[data-preview-frame]').find(f=>f.contentWindow===event.source);if(frame){frame.dataset.ready='yes';queuePreviews()}});

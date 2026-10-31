@@ -1,4 +1,4 @@
-import {supa,online,CONFIG} from './core.js?v=8.0.0';
+import {supa,online,CONFIG} from './core.js?v=8.2.0';
 // Explicit save still publishes. These snapshots never touch stories or story_private.
 export function createDrafts({capture,restore,key,ready,onError=()=>{}}){
  const bar=document.createElement('div');bar.className='draft-bar';bar.innerHTML='<p role="status">Ноорог автоматаар хадгална.</p><button type="button" data-restore hidden>Ноорог сэргээх</button><button type="button" data-discard hidden>Ноорог хаях</button>';document.getElementById('storyEditorTitle').closest('.panel')?.prepend(bar);

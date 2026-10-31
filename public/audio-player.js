@@ -1,6 +1,6 @@
 /* One real audio source, shared by hero/cards/reader. No synthetic voice substitution. */
-import {$,safeUrl} from './core.js?v=8.0.0';
-import {clockDuration} from './studio.js?v=8.0.0';
+import {$,safeUrl} from './core.js?v=8.2.0';
+import {clockDuration} from './studio.js?v=8.2.0';
 export function createAudioPlayer({onChange=()=>{},onProgress=()=>{}}={}) {
  const audio=$('#audioFile'),root=$('#audioPlayer'),seek=$('#audioSeek');
  let track=null,phase='idle',request=0,rate=1,resumeAt=0,lastProgress=0;

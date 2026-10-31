@@ -1,4 +1,4 @@
-import {createLocalRepository} from './local-repository.js?v=8.0.0';
+import {createLocalRepository} from './local-repository.js?v=8.2.0';
 /* Shared store: local preview or online Supabase. No private keys are ever embedded. */
 export const CONFIG=window.ADULT_CONFIG||{};
 export const authConfigured=Boolean(CONFIG.supabaseUrl&&CONFIG.supabaseAnonKey);

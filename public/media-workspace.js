@@ -1,4 +1,4 @@
-import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadCloudinary,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=8.0.0';
+import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadCloudinary,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=8.2.0';
 const MEDIA='application/x-adult-media',STORY='application/x-adult-story';
 export function createMediaWorkspace(o){
  const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],selected=new Set(),tasks=[];
@@ -18,7 +18,7 @@ export function createMediaWorkspace(o){
   if(!data())return;const items=filtered($('#mediaSearch').value);
   $('#assetCount').textContent=`${assets().length} зураг · ${items.length} харагдаж байна`;
   const info=persistenceInfo(),note=$('#mediaPersistence');note.classList.toggle('browser-only',info.mode==='browser');
-  note.textContent=info.mode==='disk'?'✓ Зургийн сан файлд хадгалагдаж байна · Сервер дахин асаах, хавтас шинэчлэхэд хадгалагдана.':info.mode==='supabase'?'✓ Зургийн сан Supabase дээр хадгалагдаж байна.':'Энэ сервер зөвхөн браузерт хадгалж байна. start.py-аар асаавал зургийн сан компьютер дээр файлд хадгалагдана.';
+  note.textContent=info.mode==='disk'?'✓ Зургийн сан файлд хадгалагдаж байна · Сервер дахин асаах, хавтас шинэчлэхэд хадгалагдана.':info.mode==='supabase'?'✓ Зургийн сан Supabase дээр хадгалагдаж байна.':'Локал туршилтын зургийн сан энэ браузерт хадгалагдана. Онлайн санд Supabase ашиглана; өмнөх зургуудыг JSON backup-аас нэгтгэж болно.';
   $('#mediaGrid').innerHTML=items.length?items.map(a=>`<article class="asset-card" draggable="true" data-media-id="${esc(a.id)}"><label class="asset-check"><input type="checkbox" data-media-check="${esc(a.id)}" aria-label="${esc(a.filename||'Зураг')} багцад сонгох"></label><div class="asset-thumb"><button type="button" data-open-assignment="${esc(a.id)}" aria-label="${esc(a.filename||'Зураг')} сонгох"><img src="${esc(a.url)}" alt="${esc(a.alt_text||'Зураг')}" style="filter:${imageStyle()}" loading="lazy" draggable="false"></button></div><div class="asset-body"><strong title="${esc(a.filename||'Зураг')}">${esc(a.filename||'Зураг')}</strong><small>${a.width||'?'} × ${a.height||'?'} · ${a.bytes?(a.bytes/1024/1024).toFixed(2)+' MB':'URL'}</small><div class="asset-actions"><button type="button" class="btn primary choose-media" data-open-assignment="${esc(a.id)}">СОНГОХ</button><button type="button" class="btn tiny outline" data-original="${esc(a.id)}">Эх зураг</button><button type="button" class="btn tiny outline" data-edit-media="${esc(a.id)}">Засах</button><button type="button" class="btn tiny danger" data-remove-media="${esc(a.id)}">Хасах</button></div></div></article>`).join(''):'<div class="empty">'+(assets().length?'Хайлтад тохирох зураг алга.':'Хадгалсан зураг алга. Upload хийх эсвэл өмнөх JSON сангаа нэгтгэнэ үү.')+'</div>';
   updateSelected();renderPickers();
  }

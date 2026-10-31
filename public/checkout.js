@@ -1,5 +1,5 @@
-import {$,esc,fmtPrice} from './core.js?v=8.0.0';
-import {memberRequest,apiMessage} from './customer-api.js?v=8.0.0';
+import {$,esc,fmtPrice} from './core.js?v=8.2.0';
+import {memberRequest,apiMessage} from './customer-api.js?v=8.2.0';
 export function createCheckout({memberAuth,modal}){
  let busy=false,pending=null;
  document.getElementById('accountDialog').addEventListener('close',()=>{pending=null});

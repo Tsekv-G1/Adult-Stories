@@ -1,40 +1,125 @@
-# ADULT Stories — GitHub / Netlify V6.2
+# Adult Stories 8.2 · Productdrop 4.4.1 · Mongolsub 4.6.1
 
-Энэ багц нь GitHub repository-д оруулж, Netlify дээр нийтлэх зориулалттай.
+Шинэ v8.2 сайжруулалт болон жижиг patch-ийн заавар: UPDATE-v8.2-MN.md.
 
-## GitHub → Netlify
+## Эхлээд
 
-1. ZIP-ээ задална.
-2. Хавтасны доторх `public/`, `supabase/`, `netlify.toml`, README болон `.gitignore`-ийг repository-ийн ҮНДСЭН түвшинд оруулна. ZIP-ийг өөрийг нь байрлуулахгүй.
-3. Netlify дээр repository-оо холбоно.
-4. Base directory: хоосон; Build command: хоосон; Publish directory: `public`. `netlify.toml` үүнийг тохируулсан.
-5. Deploy хийнэ.
+Энэ нь гурван тусдаа repository-д зориулсан бүтэн багцууд. ZIP тус бүрийг задалж, доторх `netlify.toml` байгаа түвшний файлуудыг тухайн GitHub repository-ийн үндсэн хавтаст оруулна. GitHub-д кодоо хадгалж, Netlify-тай холбоно.
 
-Сайт: `https://ТАНЫ-САЙТ.netlify.app/`
-Админ: `https://ТАНЫ-САЙТ.netlify.app/admin.html`
+**GitHub Pages дээр Netlify Functions ажиллахгүй.** Одоо screenshot дээр байгаа `tsekv-g1.github.io/Adult-Stories/public/` нь зөвхөн статик харагдац гаргана. Дугаар + нууц үг, төлбөр, эрх, хувийн аудиог бүрэн ашиглахдаа Adult-ийн Netlify эсвэл өөрийн холбосон домэйнээр орно.
 
-`public/` доторх файлууд л Netlify сайтаар нийтлэгдэнэ. SQL болон optional Edge Function нь public хавтасны гадна байна. Python desktop launcher, хувийн контентын JSON, backup, тестийн fixture энэ багцад ороогүй.
+Бодит сайт руу энэ ажлаар push/deploy хийгээгүй. Одоогийн Supabase өгүүллэг, зургуудыг шинэ ZIP дотор дахин хуулж оруулаагүй: тэд таны одоогийн өгөгдлийн санд хэвээр байна.
 
-## Supabase
+## 1. Adult Stories
 
-`public/config.js` нь хэрэглэгчийн өгсөн төслийн URL болон publishable key-тай. Cloudinary: `m3qbt9bk`, unsigned preset: `Adult_Story`.
+Netlify тохиргоо `netlify.toml` дотор:
 
-- ШИНЭ Supabase төсөл бол `supabase/schema.sql`-ийг SQL Editor дээр анх удаа ажиллуулна. Өмнө суулгасан schema-г дахин бүтнээр нь ажиллуулах шаардлагагүй.
-- Админ email/password аккаунтыг Authentication → Users дээр үүсгээд тэр хэрэглэгчийн UUID-г `admin_users` хүснэгтэд schema-ийн төгсгөлийн заавраар нэмнэ. Энгийн дугаарын бүртгэл админ эрх авахгүй.
-- Дугаар + нууц үгийн SMS-гүй бүртгэл: Authentication → Sign In / Providers → Phone → Enable ON, Confirm phone OFF; шинэ signup зөвшөөрсөн байна. Код нь эдгээр тохиргоог шалгасны дараа signup хүсэлт явуулна. Дугаарын эзэмшлийг баталгаажуулахгүй.
-- Нууц үг сэргээх SMS урсгал болон production төлбөрийн эрх энэ багцад хэрэгжээгүй.
-- Cloudinary signed upload хэрэглэх бол `supabase/functions/sign-cloudinary`-г Supabase-д тусад нь deploy хийнэ. Netlify энэ function-ийг deploy хийхгүй. Одоогийн тохиргоо unsigned upload ашигладаг.
+- Publish directory: `public`
+- Functions: `netlify/functions`
+- Node: 22
+- Build command: хоосон
 
-Supabase phone/password баримт: https://supabase.com/docs/guides/auth/passwords#with-phone
+Supabase SQL Editor дээр:
 
-## Өмнөх локал контент
+- Өмнөх V7/V8-ийн `schema.sql`, `002_backend.sql` ажилласан бол **зөвхөн `supabase/003_workspace.sql`**-ийг бүтнээр ажиллуулна.
+- Шинээр үүсгэсэн сан бол `schema.sql` → `002_backend.sql` → `003_workspace.sql` гэсэн дарааллаар ажиллуулна.
+- Хэрэв 003-ийн хуучин туршилтын хувилбарыг ажиллуулсан бол энэ багцын 003-ийг дахин ажиллуулж болно. Ноорог, сан, төлбөрийн өгөгдлийг reset хийхгүй. Atomic CMS save функц мөн шинэчлэгдэнэ.
+- Adult-ийн migration-ийг Mongolsub-ийн өөр project дээр ажиллуулахгүй.
 
-GitHub-д код оруулахад компьютерийн локал контент автоматаар шилжихгүй. Өмнөх desktop багцын админаас бүтэн JSON BACKUP авч, онлайн админы Backup / Import хэсэгт импортлоно. Хувийн өгүүллэгийн backup JSON-оо GitHub-д оруулахгүй. Нүүр хуудасны дизайн шилжүүлэх checkbox-ийг хэрэгтэй бол сонгоно.
+Netlify → Environment variables:
 
-## Локал харах
+| Нэр | Утга |
+|---|---|
+| APP_ORIGIN | Adult сайтын эцсийн HTTPS origin, жишээ `https://your-adult.netlify.app` |
+| SUPABASE_URL | `https://dgkyuijpviidrmqenclb.supabase.co` |
+| SUPABASE_SERVICE_ROLE_KEY | Adult project-ийн server service_role түлхүүр |
+| ADULT_ADMIN_KEY | Productdrop сервер дээрх ADULT_ADMIN_KEY-тай ижил, 32+ тэмдэгт |
+| PAYMENT_BANK | Хаан Банк |
+| PAYMENT_ACCOUNT | 5018953118 |
+| PAYMENT_ACCOUNT_NAME | Ганбаяр Цэвэгмид |
+| SUPPORT_CONTACT | 88748966 |
 
-`public` хавтас дотор Terminal нээгээд `python3 -m http.server 8000` ажиллуулна. Дараа нь `http://localhost:8000/index.html` эсвэл `/admin.html` нээнэ. Энэ нь тохируулсан Supabase-г ашиглах статик preview; хуучин desktop файлын санг сэргээхэд өмнөх бүтэн V6.2 багцаа ашиглана.
+Түлхүүрүүдийг GitHub болон `public/config.js` дотор бичихгүй. `.env.example` нь зөвхөн тохиргооны нэрсийн жишээ. Netlify-д утгыг оруулсны дараа redeploy хийнэ. APP_ORIGIN-д `/public`, `/index.html` эсвэл query нэмэхгүй.
 
-## Баталгаажуулалт
+CMS админ өмнөх Supabase Auth email + password-аараа нэвтэрнэ; тухайн user `public.admin_users`-д байх ёстой. Энгийн хэрэглэгчийн дугаар + password бүртгэл тусдаа `adult_members` санд орно. SMS provider/Twilio шаардахгүй. Дугаарын эзэмшлийг бүртгүүлэх үед SMS-ээр баталгаажуулахгүй.
 
-V6.2-ийн синтакс болон mock логикийн шалгалтууд өмнө давсан. Шинэ UI-ийн бодит desktop/mobile browser ажиллагаа, Supabase бүртгэл, жинхэнэ Cloudinary upload, GitHub/Netlify deployment-ийг live баталгаажуулаагүй. Энэ багц үүсгэхэд ямар нэг сайт нийтлээгүй, бодит өгөгдөл шилжүүлээгүй, Supabase Dashboard-ийн тохиргоо өөрчлөөгүй.
+## 2. DropDashboard / Productdrop
+
+Одоогийн repository-гээ Productdrop 4.4.1 ZIP-ийн файлаар шинэчилнэ. Build `npm run build`, publish `dist`, Functions хэвээр.
+
+**`server/Code.gs`-ийг Apps Script дээр шинэчилж, Web App deployment-ийн шинэ хувилбар гаргана.** Одоогийн SHEET_ID, ADMIN_KEY, Google Sheets болон script properties-ийг хадгална. ZIP upload хийх нь Apps Script-ийг өөрөө шинэчлэхгүй.
+
+Productdrop-ийн Netlify дээр одоогийн ADMIN_KEY, GAS_URL, өөрийн Supabase тохиргоог хадгалаад дараахыг нэмнэ:
+
+| Нэр | Утга |
+|---|---|
+| ADULT_API_ORIGIN | Adult Netlify HTTPS origin |
+| ADULT_ADMIN_KEY | Adult серверийн ижил нууц утга |
+| MONGOLSUB_API_ORIGIN | Mongolsub HTTPS origin, жишээ `https://mongolsub.com` |
+| MONGOLSUB_ADMIN_KEY | Mongolsub серверийн одоогийн ADMIN_API_KEY утга |
+
+Origin-д `/api/admin` нэмэхгүй. Dashboard-ийн Mongolsub хуучин үйлдлүүд Тохиргоо хэсгийн MongolSUB URL / Admin Key-гаа үргэлжлүүлэн ашиглана. Харин шинэ төслүүдийн тайлан серверийн дээрх env-ээр уншина.
+
+DropDashboard → Admin → **Adult Stories**:
+
+- Төлбөрийн хүсэлт: хүлээгдэж буй / батлагдсан / татгалзсан.
+- Банкны лавлагаа, шалгасан тэмдэглэл оруулаад батлах эсвэл татгалзах.
+- Батлагдсан захиалгын эрхийг шалтгаантай цуцлах.
+- Хэрэглэгчид, нууц үг сэргээх хүсэлт.
+- Өгүүллэг, зураг, ангилал засах CMS-ийг нээх холбоос.
+
+`admin.html` зөвхөн контент, медиа, дизайн засна. Төлбөр болон хэрэглэгчийн удирдлагыг тэндээс авсан.
+
+Хэрэглэгч төлсөн гэж мэдэгдэх нь эрхийг автоматаар нээхгүй. Банкны хуулгыг тулгаж админ баталсны дараа нээгдэнэ. Эрх цуцлах нь банкны мөнгийг буцаадаггүй.
+
+## 3. Mongolsub
+
+Mongolsub 4.6.1 ZIP-ээр өөрийн repository-гээ шинэчилж deploy хийнэ. Одоогийн серверийн түлхүүр, үйлчилгээний тохиргоог хадгална.
+
+Одоогийн 001–010 migration ажилласан сан дээр **`db/011_project_report.sql`**-ийг Supabase SQL Editor-т ажиллуулна. Энэ нэмэлт нь төслийн орлого, хүлээгдэж буй төлбөр, үлдэгдэлтэй төлбөртэй кредитийн тайланг гаргана. Mongolsub-ийн хадмал засварлах UI болон дүрслэх кодыг энэ шинэчлэлээр өөрчлөөгүй.
+
+## Өгүүллэг ба 30 хоногийн эрх
+
+Сонгосон загвар: **өгүүллэг тус бүр + 30 хоног бүх сангийн эрх**. Өгүүллэгийн үнэ CMS-ээс, бүх сангийн үнэ тохиргооноос уншигдана. Одоогийн сангийн үнийг migration өөрчлөхгүй. Шинэ өгүүллэгийн default 9,900₮; бүх сангийн default 29,900₮.
+
+30 хоногийн эрх банкны төлбөр батлагдах үед эхэлнэ. Дахин авбал хүчинтэй эрхийн төгсгөлөөс 30 хоногоор сунгана. Тусдаа өгүүллэгийн эрх хугацаагүй; цуцлах хүртэл хадгалагдана.
+
+## Нууц үг сэргээх
+
+Adult хэрэглэгч «Нууц үгээ мартсан» хэсэгт дугаараа оруулна. DropDashboard-ийн Adult Stories → Нууц үг сэргээх хэсэгт хүсэлт орно. Та эзэмшигчийг шалгаад тэмдэглэл бичиж, шинэ нууц үг үүсгэнэ.
+
+Шинэ нууц үг нэг удаа харагдана. «SMS текст хуулах»-ыг дарж **та өөрийн дугаараас гараар илгээнэ**. Сайт SMS илгээхгүй. Хуучин нэвтрэлтүүд хаагдана; хэрэглэгч шинэ нууц үгээр ороод «Миний эрх»-ээс сольж болно. Adult-ийн шинэ нууц үг жагсаалт, audit, localStorage-д ил текстээр хадгалагдахгүй.
+
+## Бүтэн аудио
+
+003 migration `adult-audio` private bucket үүсгэнэ. CMS → Өгүүллэг → Аудио хэсгээс бүтэн аудиог хувийн санд upload хийнэ. Хэрэглэгчийн эрхийг шалгасны дараа 15 минутын түр холбоос гаргана. Холбоос хүчинтэй хугацаандаа бусдад дамжуулагдаж болох тул үүнийг DRM гэж үзэхгүй.
+
+Өмнө Cloudinary дээр public байдлаар байрласан бүтэн аудио автоматаар private болохгүй. Түүнийг шинэ private upload-аар дахин оруулж хадгална. Нууцлах шаардлагатай хуучин public файлаа Cloudinary-гаас өөрөө хасах шаардлагатай. Үнэгүй preview болон cover зураг Cloudinary дээр хэвээр.
+
+UI/bucket-ийн дээд хэмжээ 500 MB боловч Supabase project/plan-ийн бодит file-size limit давуу үйлчилнэ. Энэ хувилбар signed upload ашиглана; том аудионы resumable upload ороогүй.
+
+## Зураг ба editor
+
+Cloudinary cloud name: `m3qbt9bk`, unsigned preset: `Adult_Story`. Өмнөх зураг, Supabase metadata хэвээр. Зургийн эхийг хадгалж, сайтад дэлгэцэд тохирсон жижиг хувилбар, автомат формат/чанар ашиглана. Hero болон эхний зургуудыг түрүүлж, бусдыг scroll хийх үед ачаална. Бодит сайтын интернэт дэх ачаалах хугацааг хэмжээгүй.
+
+Desktop preview нь тухайн editor нээлттэй браузерын өргөнийг ашиглана; утасны preview 390 px. Ижил өргөн, ижил хадгалсан тохиргоонд сайт болон preview-ийн хэмжээ/crop таарна. Өөр өргөнтэй дэлгэцэд Cover тохиргоо дагаж crop өөрчлөгдөх нь хэвийн; утасны байрлалыг тусад нь тохируулж болно.
+
+Нүүр, өгүүллэг, нэгдсэн дизайны preview нь тухайн хэсгийн өөрчлөлтийг харуулна. Өөр хэсгийн хадгалаагүй ноорог түүнийг санамсаргүй өөрчлөхгүй. Өөрчлөлтөө ХАДГАЛАХ дараад сайтаа дахин ачаална. Өгүүллэгийн ноорог автоматаар хадгалагдах ч нийтлэхийн тулд ХАДГАЛАХ шаардлагатай.
+
+## Локал нээх
+
+`file://`-оор нээхэд хоосон дэлгэцийн оронд зөв хавтсыг заасан Terminal команд гарна. Багцын `public` хавтас дотроос:
+
+```bash
+python3 -m http.server 8000
+```
+
+Дараа нь `http://localhost:8000/index.html` эсвэл `http://localhost:8000/admin.html` нээнэ. Өмнө өөр хавтсаас сервер асаасан бол Ctrl+C дарж зогсоогоод зөв хавтсаас асаана. Энэ онлайн repository-д `start.py` байхгүй.
+
+Python сервер зөвхөн нүүр хуудас, CMS-ийн static файлыг ажиллуулна. Netlify Functions шаардсан хэрэглэгч, төлбөр, хувийн аудио ажиллагааг Netlify дээр эсвэл Netlify Dev-ээр туршина. `?local=1` нь зөвхөн localhost дээр браузерт хадгалдаг туршилтын горим; нийтлэхэд ашиглахгүй.
+
+Тусдаа өгсөн `admin.html` нь ZIP-ийн `public/admin.html`-тэй ижил. JS/CSS-тай нь хамт байрлуулна; дан HTML нь бүтэн CMS биш.
+
+## Шалгалтын хүрээ
+
+`VERIFIED-MN.md`-д тэнцсэн шалгалт, браузерын нотолгоо, үлдсэн хязгаарлалтыг бичсэн. Туршилтууд тусдаа локал PostgreSQL загвар ба хуурамч provider хариутай; production Supabase/Netlify/Cloudinary upload болон бодит банк/SMS-г ажиллуулж баталгаажуулаагүй.

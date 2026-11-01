@@ -1,6 +1,6 @@
-import {memberRequest,apiMessage} from './customer-api.js?v=8.2.0';
+import {memberRequest,apiMessage} from './customer-api.js?v=8.3.0';
 /* Customer sessions use the Netlify backend; CMS administrators keep Supabase Auth. */
-import {$,esc,authConfigured} from './core.js?v=8.2.0';
+import {$,esc,authConfigured} from './core.js?v=8.3.0';
 export function normalizePhone(value){
  let raw=String(value||'').trim();if(!/^[+\d\s().-]+$/.test(raw))throw Error('Утасны дугаараа зөв оруулна уу.');
  raw=raw.replace(/[\s().-]/g,'');if(raw.startsWith('00'))raw='+'+raw.slice(2);

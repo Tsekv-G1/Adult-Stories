@@ -1,4 +1,5 @@
-import {createLocalRepository} from './local-repository.js?v=8.2.0';
+import {prepareUpscale} from './image-upscale.js?v=8.3.0';
+import {createLocalRepository} from './local-repository.js?v=8.3.0';
 /* Shared store: local preview or online Supabase. No private keys are ever embedded. */
 export const CONFIG=window.ADULT_CONFIG||{};
 export const authConfigured=Boolean(CONFIG.supabaseUrl&&CONFIG.supabaseAnonKey);
@@ -10,7 +11,7 @@ export const $$=(s,root=document)=>[...root.querySelectorAll(s)];
 export const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const textParas=s=>String(s||'').split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean);
 export const uid=()=>crypto.randomUUID?crypto.randomUUID():`draft-${Date.now()}`;
-export const safeUrl=v=>{try{let u=new URL(v);return u.protocol==='https:'||(['127.0.0.1','localhost'].includes(u.hostname)&&u.protocol==='http:')?u.href:''}catch{return''}};
+export const safeUrl=v=>{try{let u=new URL(v);if(u.username||u.password)return '';return u.protocol==='https:'||(['127.0.0.1','localhost'].includes(u.hostname)&&u.protocol==='http:')?u.href:''}catch{return''}};
 export const slugify=v=>String(v||'').trim().toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яөүё\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').slice(0,90)||('story-'+Date.now());
 export const overlayDefault=()=>({tint:'#db123a',red:42,dark:55,direction:105,x:50,y:50,fit:'cover'});
 export const overlayCSS=(o={})=>{let e={...overlayDefault(),...o};let n=Math.max(0,Math.min(90,Number(e.red)||0))/100;let d=Math.max(0,Math.min(95,Number(e.dark)||0))/100;let hex=/^#[\da-f]{6}$/i.test(e.tint)?e.tint:'#db123a';let rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));return `linear-gradient(0deg,rgba(3,3,7,${Math.max(.4,d).toFixed(2)}) 0%,transparent 70%),linear-gradient(${Number(e.direction)||105}deg,rgba(3,3,8,${d.toFixed(2)}) 0%,rgba(${rgb.join(',')},${n.toFixed(2)}) 100%)`};
@@ -79,15 +80,15 @@ export async function session(){if(!online)return null;let sb=await supa();let r
 export async function signIn(email,password){let sb=await supa();let r=await sb.auth.signInWithPassword({email,password});if(r.error)throw r.error;return r.data}
 export async function signOut(){let sb=await supa();let r=await sb.auth.signOut();if(r.error)throw r.error}
 export async function isAdmin(){if(!online)return true;let sb=await supa();let r=await sb.rpc('is_admin');if(r.error)throw r.error;return !!r.data}
-export async function uploadCloudinary(file,{signal}={}){
+export async function uploadCloudinary(file,{signal,upscale=CONFIG.autoUpscaleImages!==false,onStatus=()=>{}}={}){
  if(!file?.type.startsWith('image/'))throw Error('Зөвхөн зураг upload хийнэ.');
  if(file.size>25*1024*1024)throw Error('Зургийн хэмжээ 25MB-аас хэтэрлээ.');
  let f=new FormData();f.append('file',file,file.name);
  let cloud=CONFIG.cloudName,params={};
  if(online&&CONFIG.signedUpload){let sb=await supa();let {data,error}=await sb.functions.invoke('sign-cloudinary',{body:{purpose:'story-image'}});if(error)throw error;if(data.cloud_name!==CONFIG.cloudName)throw Error('Signed upload серверийн CLOUDINARY_CLOUD_NAME тохиргоог '+CONFIG.cloudName+' болгож шинэчилнэ үү.');cloud=data.cloud_name;params=data;for(let k of ['api_key','signature','timestamp','asset_folder'])f.append(k,String(data[k]));}
  else {if(!CONFIG.unsignedUploadPreset)throw Error('config.js дотор unsignedUploadPreset оруулна уу.');f.append('upload_preset',CONFIG.unsignedUploadPreset)}
- const res=await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud)}/image/upload`,{method:'POST',body:f,signal});let data=await res.json();if(!res.ok)throw Error(data.error?.message||'Cloudinary upload амжилтгүй');
- return {url:data.secure_url,public_id:data.public_id,asset_id:data.asset_id||'',filename:file.name,width:data.width||0,height:data.height||0,bytes:data.bytes||file.size,format:data.format||'',alt_text:file.name.replace(/\.[^.]+$/,''),created_at:new Date().toISOString()};
+ const res=await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud)}/image/upload`,{method:'POST',body:f,signal});let data;try{data=await res.json()}catch{throw Error('Cloudinary зураг хүлээж авсангүй. Cloud name, upload preset болон холболтоо шалгана уу.')}if(!res.ok)throw Error(data.error?.message||'Cloudinary upload амжилтгүй');
+ const enhanced=await prepareUpscale(data.secure_url,data.width,data.height,{enabled:upscale,signal,onStatus});const result={url:enhanced.url,public_id:data.public_id,asset_id:data.asset_id||'',filename:file.name,width:data.width||0,height:data.height||0,bytes:data.bytes||file.size,format:data.format||'',alt_text:file.name.replace(/\.[^.]+$/,''),created_at:new Date().toISOString()};Object.defineProperty(result,'uploadNotice',{value:enhanced.message,enumerable:false});return result;
 }
 export function subscribeChanges(callback){const local=()=>callback();window.addEventListener('adult-data-changed',local);channel?.addEventListener('message',local);window.addEventListener('storage',ev=>{if(ev.key===DB_KEY)callback()});let cleanup=()=>{};if(online){supa().then(sb=>{const sub=sb.channel('cms-live').on('postgres_changes',{event:'*',schema:'public',table:'stories'},callback).on('postgres_changes',{event:'*',schema:'public',table:'media_assets'},callback).on('postgres_changes',{event:'*',schema:'public',table:'site_settings'},callback).subscribe();cleanup=()=>sb.removeChannel(sub)}).catch(()=>{});}return ()=>{cleanup();window.removeEventListener('adult-data-changed',local);channel?.removeEventListener('message',local)}}
 

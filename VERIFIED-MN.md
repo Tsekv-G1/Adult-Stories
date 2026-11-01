@@ -1,44 +1,15 @@
-# Шалгалтын тайлан · 2026-10-31
+# Adult Stories v8.3 · шалгалтын үр дүн
 
-## Тэнцсэн
+2026-11-01 · Зөвхөн Adult Stories-д өөрчлөлт хийсэн.
 
-- Adult Stories: 18 функциональ шалгалт. Бүртгэл/нэвтрэлт, сcrypt hash, cookie, төлөөгүй үед хувийн агуулга хаалттай байх, серверийн үнэ, төлбөр мэдэгдэх, банкны баталгаа, давхар батлахаас хамгаалах, эрх, орлогын тайлан, төхөөрөмж хоорондын сан/явц, ноорог RLS, нууц үг сэргээх/солих, хуучин session хаах, atomic CMS save, 30 хоногийн эрх ба сунгалт, migration дахин ажиллах.
-- Productdrop: байгаа 58 тест тэнцсэн; Netlify build тэнцсэн. Apps Script тестийн mock-д шинээр ашигласан стандарт getValue/getValues үйлдлүүдийг нэмсэн, шинэ ledger-ийн давхар бичилт үүсэхгүйг шалгасан. Хуучин temporary_password-ийн тестийг одоогийн эзэмшигч шалгасан reset урсгалд тааруулсан.
-- Mongolsub: 001–011 SQL migration болон үлдэгдэлтэй төлбөртэй кредитийн шинэ тайлан тэнцсэн. Source check тэнцсэн.
-- Productdrop тайлангийн тооцоолол: бодит мэдэгдэж буй дүнг нэмэх, хуучин тодорхойгүй баталсан огноог сарын орлогод таамгаар оруулахгүй байх.
-- 174 тусдаа script, 78 inline script-ийн syntax; Adult HTML-ийн давхардсан ID, script/style холбоосын шалгалт тэнцсэн.
+- Шинэ 18 regression тест тэнцсэн: хаасан/өөр хэрэглэгчийн төлбөрийн хариу, modal солих, login дараах checkout, upscale eligibility/423 retry/fallback/resize дараалал, draft revision/owner/story isolation/cleanup error, audio replay, давхар CMS save, HTML→JSON алдааны мэдэгдэл, Supabase payload.
+- Өмнөх 5 frontend regression тэнцсэн.
+- Backend/SQL-ийн 20 шалгалт тэнцсэн; entitlement-гүй/anonymous хэрэглэгчид бүтэн аудио/текст авахгүй; эрхтэй хэрэглэгчид шууд HTTPS MP3 URL өөрчлөлтгүй ирдэг; буруу scheme буцаж ирэхгүй.
+- Кодын 22 script, 3 inline script, HTML-ийн ID/asset холбоосын шалгалт тэнцсэн.
+- Локал браузерт 4 секундийн хиймэл аудио URL тоглож duration=4, paused=false болсон. Дууссан аудиог Replay дарахад 0 секундээс эхэлсэн.
+- Editor-д full URL оруулж 0:04 хугацааг уншаад шинэ ноорог хадгалсан; аудио file-upload талбарын тоо 0. Консолд error/warn гараагүй.
+- Desktop 1280px, mobile 390px харагдац; search clear ажилласан. Энэ нь browser viewport-ийн шалгалт, бодит утасны hardware/network хэмжилт биш.
+- Cloudinary бодит AI upscale хийх эсвэл шинэ бодит зураг upload хийж баталгаажуулаагүй. Provider 423/403/HTML хариу болон resize дарааллыг mock-оор шалгасан. Акаунтын зөвшөөрөл, quota, AI гаралтын чанарыг шалгаагүй.
+- Production deploy, бодит банк/SMS/хэрэглэгчийн эрх өөрчлөөгүй. Тестийн PostgreSQL загвар, 4 секундийн tone, цэцгийн зураг ашигласан.
 
-## Браузераар хийсэн
-
-Зөвхөн localhost дахь тусдаа туршилтын өгөгдөл, цэцгийн зураг, 4 секундийн хиймэл аудиогоор:
-
-- Нэвтрэх → өгүүллэгийн төлбөрийн хүсэлт → төлсөн мэдэгдэл → админы батлах → бүтэн текст/аудио нээгдэх.
-- Shared Adult удирдлагыг гурван төслийн панель дотор холбож, захиалга батлах, эрх цуцлах, тайлангийн өөрчлөлтийг харсан. Productdrop/Mongolsub-ийн UI жишээ тайлангийн хариу ашигласан; тэдний бодит серверийг браузераас шалгаагүй. Бүтэн DropDashboard-ийн гаднах нэвтрэх хаалга, хуучин бүх хэрэгслээр нэвтэрч туршаагүй.
-- Бүтэн аудио play/pause/хугацаа; saved library болон аудионы явц өөр цонхонд синк хийх.
-- CMS ноорог гарчиг/тайлбарыг өөр цонхноос сэргээх.
-- Media Library-д HTTPS зураг URL нэмэх, grid-ээс Hero сонгох, crop хадгалах.
-- Desktop дээр 1280 px, утасны 390 px болон 320 px өргөн. Энэ нь браузерын responsive шалгалт; бодит утасны hardware/network хэмжилт биш.
-- Бүтэн өргөнтэй reader header, зураг дээр нэг гарчиг, картын нэрийн давхардалгүй байдал, текстийн ижил 3 мөрийн өндөр.
-- Браузерын Back → нүүр, Forward → өгүүллэг; сайтын «Өгүүллэгүүд рүү буцах» товч.
-- Editor-ийн Hero preview болон public view: desktop дээр 1280 px viewport, 1265 px зураг, 714.84375 px өндөр, crop 50% / 100%, Zoom 101% ижил. Утасны preview/public хоёулаа 390 px viewport, 640 px Hero, ижил crop/zoom.
-- Шалгасан нүүр, унших хуудас, CMS болон isolated төслийн панелийн консолд алдаа/анхааруулга гараагүй.
-- Cloudinary responsive source variant болон Onest кирилл font ашиглагдаж байгааг харсан. Production cover ачаалах хугацааг хэмжээгүй.
-
-## Mongolsub-ийн бусад тест
-
-393 тестээс 389 тэнцсэн, 4 нь хадмал зургийн pixel/font/emoji дүрслэл дээр алдаатай:
-
-1. actual Box painter applies the extended text shadow and produces different visible pixels
-2. Fast Paced emoji on/off and row frequency affect the shared painter at matching positions
-3. Fast Paced auto emoji also draws a deterministic fallback for text without a keyword match
-4. mixed font sizes and small caps keep Box and Sweep centered with non-overlapping word bounds
-
-Эдгээрийн public/index.html болон тестийн эх код нь хэрэглэгчийн ChimegeSUB-main (1).zip-ээс өөрчлөгдөөгүйг byte-аар харьцуулсан. Энэ шинэчлэлийн хүрээнд хадмалын дүрслэлийг засварлаагүй. Тиймээс Mongolsub-ийн бүх тестийг тэнцсэн гэж үзээгүй.
-
-## Production дээр баталгаажаагүй
-
-Бодит Netlify deploy, Supabase-ийн hosted permission/storage, Cloudinary/Supabase бодит upload, банкны мөнгө, SMS шалгаагүй. SQL нь PGlite PostgreSQL загвар дээр, provider нь тусгаарласан fixture хариутай ажилласан. Иймээс production-ийн environment, түлхүүр, migration суулгасны дараах live шалгалт шаардлагатай.
-
-file:// туслах дэлгэц, зөв хавтсыг quote хийсэн Terminal команд нь кодын шалгалтаар баталгаажсан. Браузерын хэрэгсэл file: protocol нээхийг хориглосон тул file://-ийн UI-г браузераар баталгаажуулаагүй. HTTP дээр admin.html render, local CMS ажиллагаа шалгагдсан.
-
-ZIP-үүдэд тестийн хуурамч хэрэглэгч, fixture сервер, node_modules, private key, .env, build dist оруулаагүй. Бодит хэрэглэгчийн өгөгдлийг өөрчлөөгүй. Архивын CRC, шаардлагатай root файлуудыг багцалсны дараа шалгасан.
+Бүрэн ZIP/8.2-оос шинэчлэх patch-ийн CRC болон шаардлагатай файлуудыг багцалсны дараа шалгасан. Provider-ийн боломж болон public MP3 холбоосын хязгаарлалтыг README-д бичсэн.

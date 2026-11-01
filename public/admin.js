@@ -1,12 +1,16 @@
-import {createDrafts} from './editor-drafts.js?v=8.2.0';
-import {audioPreview,isPrivateAudio,mountPrivateAudio} from './private-audio.js?v=8.2.0';
-import {importCloudBackup} from './cloud-import.js?v=8.2.0';
-import {createMediaWorkspace} from './media-workspace.js?v=8.2.0';
-import {CONFIG,online,$,$$,esc,overlayCSS,overlayDefault,safeUrl,getData,getBody,saveStory,removeStory,saveSite,saveAsset,updateAsset,removeAsset,uploadCloudinary,session,signIn,signOut,isAdmin,persistenceInfo,importLocalBackup} from './core.js?v=8.2.0';
-import {visualDefault,cloudSettings,visualFor,cropFor,applyPhoto,audioSeconds,clockDuration,automaticSlug,automaticPublishAt,measureAudio} from './studio.js?v=8.2.0';
+import {optimizedImage} from './image-delivery.js?v=8.3.0';
+import {originalImageUrl} from './image-upscale.js?v=8.3.0';
+import {createDrafts} from './editor-drafts.js?v=8.3.0';
+import {audioPreview} from './private-audio.js?v=8.3.0';
+import {importCloudBackup} from './cloud-import.js?v=8.3.0';
+import {createMediaWorkspace} from './media-workspace.js?v=8.3.0';
+import {CONFIG,online,$,$$,esc,overlayCSS,overlayDefault,safeUrl,getData,getBody,saveStory,removeStory,saveSite,saveAsset,updateAsset,removeAsset,uploadCloudinary,session,signIn,signOut,isAdmin,persistenceInfo,importLocalBackup} from './core.js?v=8.3.0';
+import {visualDefault,cloudSettings,visualFor,cropFor,applyPhoto,audioSeconds,clockDuration,automaticSlug,automaticPublishAt,measureAudio} from './studio.js?v=8.3.0';
+const upscaleCheckbox=document.getElementById('autoUpscaleImages');if(upscaleCheckbox)upscaleCheckbox.checked=CONFIG.autoUpscaleImages!==false;
 let mediaWorkspace=null;
 let data=null,active='overview',editing=null,returnSlot=null,editingAssetId=null,pendingImport=null;
 let storyOverlay=overlayDefault(),homeOverlay=overlayDefault(),themeDraft=visualDefault();
+let storySaving=false;
 let storyDirty=false,homeDirty=false,themeDirty=false,settingsDirty=false,bodyReady=true,editToken=0;
 let audioState={url:'',seconds:0,status:'empty',promise:null},audioToken=0,audioProbeTimer;
 let bodyData={full_text:'',full_audio_url:''};
@@ -29,11 +33,11 @@ function updateStoryMeta(){
  $('#storyEditorTitle').textContent=$('#storyTitle').value||'Шинэ өгүүллэг';
  $('#saveStory').textContent='ХАДГАЛАХ';$('#saveStory').classList.toggle('is-dirty',storyDirty);
 }
-function showOriginal(url){if(!url)return toast('Эх зураг сонгоогүй байна',true);$('#lightboxImage').src=url;$('#lightbox').classList.remove('hidden')}
+function showOriginal(url){if(!url)return toast('Эх зураг сонгоогүй байна',true);$('#lightboxImage').src=originalImageUrl(url);$('#lightbox').classList.remove('hidden')}
 $('#lightbox').addEventListener('click',()=>$('#lightbox').classList.add('hidden'));
 function imagePreview(scope){
  const node=$(`#${scope}ImagePreview`),overlay=scope==='story'?storyOverlay:homeOverlay,id=$(`#${scope==='story'?'storyCover':'homeImage'}`).value;
- let im=node.querySelector('img'),a=asset(id);if(a){if(!im){im=document.createElement('img');im.draggable=false;node.prepend(im)}if(im.getAttribute('src')!==a.url)im.src=a.url;im.alt=a.alt_text||a.filename||'Зураг';applyPhoto(im,visualFor({visual_theme:themeDraft},overlay,cropDevices[scope]==='mobile'))}else im?.remove();
+ let im=node.querySelector('img'),a=asset(id);if(a){if(!im){im=document.createElement('img');im.draggable=false;node.prepend(im)}if(im.getAttribute('src')!==optimizedImage(a.url,1200))im.src=optimizedImage(a.url,1200);im.alt=a.alt_text||a.filename||'Зураг';applyPhoto(im,visualFor({visual_theme:themeDraft},overlay,cropDevices[scope]==='mobile'))}else im?.remove();
  node.querySelector('.cover-overlay').style.background=overlayCSS(visualFor({visual_theme:themeDraft},overlay));
  node.classList.toggle('has-image',Boolean(a));
 }
@@ -88,12 +92,13 @@ async function reload({reset=false}={}){
  fillAssetSelect($('#storyCover'),storyCover);fillCategories(category);imagePreview('story');dashboard();renderList();renderMedia();working('Синхрончилсон');queuePreviews();
 }
 async function saveStoryAction(){
+ if(storySaving)return;if(mediaWorkspace?.pendingForStory())return toast('Энэ өгүүллэгийн зураг оруулж дуусахыг хүлээгээд хадгална уу.',true);storySaving=true;$('#savingNotice').hidden=false;$('#appRoot').inert=true;$('#appRoot').setAttribute('aria-busy','true');working('Хадгалж байна…');
+ const savedEditToken=editToken;
  try{if(!bodyReady)throw Error('Хувийн агуулга бүрэн ачаалагдаагүй байна. Өгүүллэгээ дахин сонгоно уу.');formStory();$('#saveStory').disabled=true;working('Хадгалж байна…');
  const fullRaw=$('#storyAudioFull').value.trim(),previewRaw=$('#storyAudioPreview').value.trim();if(fullRaw&&!safeUrl(fullRaw))throw Error('Бүтэн аудио URL буруу байна.');if(previewRaw&&!safeUrl(previewRaw))throw Error('Preview аудио URL буруу байна.');
- const measured=await probeFullAudio();if(fullRaw&&!measured&&$('#storyStatus').value==='published')throw Error('Нийтлэхээс өмнө бүтэн аудионы хугацааг уншуулах шаардлагатай. URL-аа шалгах эсвэл ноорог хадгална уу.');
- if(online&&fullRaw&&!isPrivateAudio(fullRaw))throw Error('Бүтэн аудиог Хувийн аудио хэсэгт дахин оруулна уу. Нийтийн Cloudinary URL хамгаалагдахгүй.');
+ const measured=await probeFullAudio();if(savedEditToken!==editToken)throw Error('Өгүүллэг солигдсон тул хадгалалтыг зогсоолоо.');if(fullRaw&&!measured&&$('#storyStatus').value==='published')throw Error('Нийтлэхээс өмнө бүтэн аудионы хугацааг уншуулах шаардлагатай. URL-аа шалгах эсвэл ноорог хадгална уу.');
  const draftKey=editing?.id||'new';const saved=await saveStory(formStory(),{full_text:$('#storyFull').value,full_audio_url:safeUrl(fullRaw)});await drafts.clear(draftKey);storyDirty=false;await reload();await editStory(saved.id,{force:true});toast('Өгүүллэг хадгалагдлаа · '+statusNames[saved.status]);
- }catch(e){working('Хадгалж чадсангүй');toast(e.message,true)}finally{$('#saveStory').disabled=!bodyReady}
+ }catch(e){working('Хадгалж чадсангүй');toast(e.message,true)}finally{storySaving=false;$('#savingNotice').hidden=true;$('#appRoot').inert=false;$('#appRoot').removeAttribute('aria-busy');$('#saveStory').disabled=!bodyReady}
 }
 $('#storyList').addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)editStory(b.dataset.edit)});$('#newStory').addEventListener('click',()=>newStory());$('#overviewNew').addEventListener('click',()=>{setTab('stories');newStory()});$('#storyListSearch').addEventListener('input',renderList);$('#storyListStatus').addEventListener('change',renderList);
 $$('.story-editor input,.story-editor textarea,.story-editor select').filter(el=>!el.closest('#storyGradientControls')&&!el.closest('[data-asset-picker]')&&el.id!=='storyAudioFull').forEach(el=>el.addEventListener('input',markStory));
@@ -124,7 +129,7 @@ function previewPayload(scope){
  return {type:'adult-studio-preview',data:{site,stories:rows,assets:data.assets,bodies:[]},view:previewViews[scope],storyId:scope==='story'&&draft.title?currentId:site.featured_story_id||rows[0]?.id};
 }
 function fitPreview(scope){const frame=$(`[data-preview-frame="${scope}"]`),stage=frame.parentElement;if(!stage.clientWidth)return;const width=previewModes[scope]==='mobile'?390:window.innerWidth,height=previewModes[scope]==='mobile'?800:840,scale=Math.min(1,stage.clientWidth/width);frame.style.width=width+'px';frame.style.height=height+'px';frame.style.transform=`scale(${scale})`;frame.style.left=Math.max(0,(stage.clientWidth-width*scale)/2)+'px';stage.style.height=Math.ceil(height*scale)+'px';frame.closest('.site-preview').querySelector('.preview-caption').textContent=`${width} px · ${previewModes[scope]==='mobile'?'Утас':'Desktop'} · Preview дотор scroll хийж болно.`;$$(`[data-preview-scope="${scope}"]`).forEach(b=>b.classList.toggle('active',b.dataset.viewport===previewModes[scope]))}
-function renderPreviews(){if(!data)return;for(const scope of ['story','home','design']){const frame=$(`[data-preview-frame="${scope}"]`);if(!frame.closest('[data-section]').classList.contains('active')||(scope==='story'&&$('#paneCover').hidden))continue;fitPreview(scope);if(!frame.getAttribute('src'))frame.src='index.html?studio=1&v=8.2.0'+(CONFIG.localContentMode?'&local=1':'');if(frame.dataset.ready==='yes')frame.contentWindow.postMessage(previewPayload(scope),location.origin)}}
+function renderPreviews(){if(!data)return;for(const scope of ['story','home','design']){const frame=$(`[data-preview-frame="${scope}"]`);if(!frame.closest('[data-section]').classList.contains('active')||(scope==='story'&&$('#paneCover').hidden))continue;fitPreview(scope);if(!frame.getAttribute('src'))frame.src='index.html?studio=1&v=8.3.0'+(CONFIG.localContentMode?'&local=1':'');if(frame.dataset.ready==='yes')frame.contentWindow.postMessage(previewPayload(scope),location.origin)}}
 $$('[data-viewport]').forEach(b=>b.addEventListener('click',()=>{const scope=b.dataset.previewScope;previewModes[scope]=b.dataset.viewport;if(scope!=='design'){cropDevices[scope]=b.dataset.viewport;drawCropControls(scope)}queuePreviews()}));
 $$('[data-preview-view]').forEach(select=>{select.value=previewViews[select.dataset.previewView];select.addEventListener('change',()=>{previewViews[select.dataset.previewView]=select.value;queuePreviews()})});
 window.addEventListener('message',event=>{if(event.origin!==location.origin||event.data?.type!=='adult-studio-ready')return;const frame=$$('[data-preview-frame]').find(f=>f.contentWindow===event.source);if(frame){frame.dataset.ready='yes';queuePreviews()}});
@@ -162,6 +167,7 @@ mediaWorkspace=createMediaWorkspace({
  openCover:()=>{setTab('stories');setEditorTab('cover')}
 });
 window.addEventListener('keydown',event=>{
+ if(storySaving){if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s')event.preventDefault();return}
  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();if(document.querySelector('dialog[open]'))return;const button={stories:'saveStory',homepage:'saveHomepage',design:'saveDesign',settings:'saveSettings'}[active];if(button)$('#'+button).click();else toast('Хадгалах өөрчлөлт энэ хэсэгт алга.');}
  if(event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.target.closest('input,textarea,select,[contenteditable=true]')){const search=active==='media'?$('#mediaSearch'):active==='stories'?$('#storyListSearch'):null;if(search){event.preventDefault();search.focus()}}
  if(event.key==='Escape'){$('#lightbox').classList.add('hidden');$('#assetEditModal').classList.add('hidden')}
@@ -170,7 +176,7 @@ async function boot(){if(!online){$('#appRoot').classList.remove('hidden');await
 
 const draftFields=['storyTitle','storyExcerpt','storyPreview','storyFull','storyTags','storyAudioPreview','storyAudioFull','storyPrice','storyOrder','storyStatus','storyCategory','storyCover'];
 const drafts=createDrafts({key:()=>editing?.id||'new',ready:()=>bodyReady&&storyDirty&&!!data,capture:()=>({fields:Object.fromEntries(draftFields.map(id=>[id,$('#'+id).value])),overlay:storyOverlay,audio_seconds:audioState.seconds,base_updated_at:editing?.updated_at||null}),restore:payload=>{if(!bodyReady)return toast('Агуулга ачаалж дуусахыг хүлээнэ үү.',true);for(const id of draftFields)if(payload.fields?.[id]!==undefined)$('#'+id).value=payload.fields[id];controlsSet('story',payload.overlay||overlayDefault());resetAudio(safeUrl($('#storyAudioFull').value),payload.audio_seconds);storyDirty=true;updateStoryMeta();queuePreviews()},onError:message=>toast(message,true)});
-if(online)mountPrivateAudio({onFile:()=>editToken,onUploaded:({reference,seconds,target})=>{if(target!==editToken){toast('Аудио байршуулсан боловч өгүүллэг солигдсон байна. Файлаа дахин сонгоно уу.',true);return}$('#storyAudioFull').value=reference;resetAudio(reference,seconds);markStory()}});
+
 window.addEventListener('pagehide',()=>drafts.flushLocal());
 try{await boot()}catch(e){
  console.error('Adult Stories admin startup failed:',e);

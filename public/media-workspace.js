@@ -1,6 +1,6 @@
-import {optimizedImage} from './image-delivery.js?v=8.3.0';
-import {originalImageUrl} from './image-upscale.js?v=8.3.0';
-import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadCloudinary,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=8.3.0';
+import {optimizedImage} from './image-delivery.js?v=8.4.0';
+import {originalImageUrl} from './image-upscale.js?v=8.4.0';
+import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadImage,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=8.4.0';
 const MEDIA='application/x-adult-media',STORY='application/x-adult-story';
 export function createMediaWorkspace(o){
  const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],selected=new Set(),tasks=[];
@@ -57,7 +57,7 @@ export function createMediaWorkspace(o){
   if(button.dataset.openAssignment){if(event.metaKey||event.ctrlKey){selected.has(id)?selected.delete(id):selected.add(id);updateSelected()}else openAssignment(id)}
   if(button.dataset.original)o.original(originalImageUrl(asset(id)?.url));
   if(button.dataset.editMedia){editingAssetId=id;$('#assetEditName').value=asset(id)?.filename||'';$('#assetEditAlt').value=asset(id)?.alt_text||'';$('#assetEditModal').classList.remove('hidden')}
-  if(button.dataset.removeMedia){if(!confirm('Зургийг CMS сангаас хасах уу? Cloudinary эх файл хадгалагдана.'))return;try{await removeAsset(id);o.removed(id);await o.reload();render();o.toast('Сангаас хаслаа. Cloudinary эх файл хэвээр.')}catch(e){o.toast(e.message,true)}}
+  if(button.dataset.removeMedia){if(!confirm('Зургийг CMS сангаас хасах уу? Хадгалсан эх файл хадгалагдана.'))return;try{await removeAsset(id);o.removed(id);await o.reload();render();o.toast('Сангаас хаслаа. Хадгалсан эх файл хэвээр.')}catch(e){o.toast(e.message,true)}}
  });
  $('#mediaGrid').addEventListener('change',event=>{const box=event.target.closest('[data-media-check]');if(!box)return;box.checked?selected.add(box.dataset.mediaCheck):selected.delete(box.dataset.mediaCheck);updateSelected()});
  $('#assetEditSave').addEventListener('click',async()=>{const a=asset(editingAssetId);if(!a)return;try{await updateAsset({id:a.id,filename:$('#assetEditName').value.trim()||a.filename,alt_text:$('#assetEditAlt').value.trim()});$('#assetEditModal').classList.add('hidden');await o.reload();render();o.toast('Зургийн мэдээлэл хадгалагдлаа')}catch(e){o.toast(e.message,true)}});
@@ -77,7 +77,7 @@ export function createMediaWorkspace(o){
   if(o.value(target.scope)!==target.before){o.toast('Зураг санд хадгалагдлаа. Сонгосон cover-ийг хэвээр үлдээлээ.');return}
   choose(target.scope,id);o.toast('Зураг санд хадгалж cover-д сонголоо. Өөрчлөлтөө хадгална уу.');
  }
- async function processQueue(){if(running)return;running=true;try{for(const task of tasks){if(task.state!=='queued')continue;try{task.state='uploading';task.message=task.uploaded?'Санд дахин хадгалж байна…':'Cloudinary руу upload хийж байна…';renderQueue();if(!task.uploaded)task.uploaded=await uploadCloudinary(task.file,{upscale:task.upscale,onStatus:message=>{task.message=message;renderQueue()}});task.message='Зургийн санд хадгалж байна…';renderQueue();const saved=await saveAsset(task.uploaded);task.state='assigning';task.message='Cover сонголтыг шинэчилж байна…';await o.reload();await applyBatch(task.batch,saved.id);task.state='done';task.message='✓ '+(task.uploaded.uploadNotice||'Санд хадгалсан')}catch(e){task.state='error';task.message=e.message}renderQueue()}render()}finally{running=false;if(tasks.some(task=>task.state==='queued'))queueMicrotask(processQueue)}}
+ async function processQueue(){if(running)return;running=true;try{for(const task of tasks){if(task.state!=='queued')continue;try{task.state='uploading';task.message=task.uploaded?'Санд дахин хадгалж байна…':'Зургийг upload хийж байна…';renderQueue();if(!task.uploaded)task.uploaded=await uploadImage(task.file,{upscale:task.upscale,onStatus:message=>{task.message=message;renderQueue()}});task.message='Зургийн санд хадгалж байна…';renderQueue();const saved=await saveAsset(task.uploaded);task.state='assigning';task.message='Cover сонголтыг шинэчилж байна…';await o.reload();await applyBatch(task.batch,saved.id);task.state='done';task.message='✓ '+(task.uploaded.uploadNotice||'Санд хадгалсан')}catch(e){task.state='error';task.message=e.message}renderQueue()}render()}finally{running=false;if(tasks.some(task=>task.state==='queued'))queueMicrotask(processQueue)}}
  function enqueue(files,target=null){if(!files.length)return;queueCollapsed=false;const batch={target,assigned:false};for(const file of files)tasks.push({id:++queueId,file,upscale:$('#autoUpscaleImages')?.checked!==false,state:'queued',message:'Дараалалд хүлээж байна',uploaded:null,batch});renderQueue();processQueue()}
  $('#uploadQueue').addEventListener('click',event=>{const retry=event.target.closest('[data-retry-upload]'),cancel=event.target.closest('[data-cancel-upload]');if(retry){const task=tasks.find(t=>t.id===Number(retry.dataset.retryUpload));if(task){task.state='queued';task.message='Дараалалд';renderQueue();processQueue()}}if(cancel){const task=tasks.find(t=>t.id===Number(cancel.dataset.cancelUpload));if(task?.state==='queued'){task.state='cancelled';task.message='Цуцлагдсан';renderQueue()}}});
  $('#closeUploadQueue').addEventListener('click',()=>{queueCollapsed=true;$('#uploadQueuePanel').classList.add('hidden')});

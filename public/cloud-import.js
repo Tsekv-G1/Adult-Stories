@@ -1,5 +1,5 @@
 /* Additive, retryable migration. Existing stories are never overwritten by matching slugs. */
-import {supa,isAdmin,safeUrl,getData,saveSite,slugify} from './core.js?v=8.3.0';
+import {supa,isAdmin,safeUrl,getData,saveSite,slugify} from './core.js?v=8.4.0';
 export async function importCloudBackup(backup,{homepage=false,onProgress=()=>{}}={}){
  if(!backup?.site||!Array.isArray(backup.assets)||!Array.isArray(backup.stories))throw Error('Backup JSON формат буруу.');
  if(!await isAdmin())throw Error('Зөвхөн админ импорт хийх эрхтэй.');

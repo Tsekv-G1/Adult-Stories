@@ -1,0 +1,34 @@
+import {mediaRequest,mergeMedia,safeUrl} from './core.js?v=8.4.0';
+export const r2Messages={r2_not_configured:'R2 тохиргоо дутуу байна. Netlify-ийн R2 хувьсагчдыг шалгаад дахин deploy хийнэ үү.',r2_buckets_must_differ:'Зураг болон хувийн аудионы bucket тусдаа байх ёстой.',r2_audio_not_configured:'R2_AUDIO_BUCKET тохиргоо алга. Хувийн аудио bucket-ийн нэрийг Netlify-д оруулна уу.',r2_list_unavailable:'R2 сангийн жагсаалт нээгдсэнгүй. API key, bucket нэр болон Object Read & Write эрхийг шалгана уу.',r2_upload_not_found:'Upload хийсэн файл R2 дээр баталгаажсангүй. Дахин оролдоно уу.',r2_upload_unavailable:'R2 upload холбоос үүссэнгүй. Серверийн тохиргоог шалгана уу.',invalid_media_file:'JPG, PNG, WEBP, AVIF зураг 25 MB хүртэл оруулна уу.'};
+export function mediaError(code){return r2Messages[code]||'R2 үйлчилгээ холбогдсонгүй. Нэвтрэлт болон Netlify/R2 тохиргоогоо шалгана уу.'}
+export async function prepareImages(file){
+ const result={width:0,height:0,variants:[]};if(typeof createImageBitmap!=='function')return result;let bitmap;
+ try{bitmap=await createImageBitmap(file);result.width=bitmap.width;result.height=bitmap.height;
+  for(const [kind,limit] of [['screen',1600],['thumb',800]]){const ratio=Math.min(1,limit/Math.max(bitmap.width,bitmap.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*ratio));canvas.height=Math.max(1,Math.round(bitmap.height*ratio));const ctx=canvas.getContext('2d');if(!ctx)continue;ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.84));if(blob?.type==='image/webp')result.variants.push({kind,blob,size:blob.size});canvas.width=canvas.height=1}
+ }catch{}finally{bitmap?.close()}if(result.variants.length!==2)result.variants=[];return result;
+}
+export async function uploadR2(file,{signal,onStatus=()=>{}}={}){
+ if(!['image/jpeg','image/png','image/webp','image/avif'].includes(file?.type)||!file.size||file.size>25*1024*1024)throw Error(r2Messages.invalid_media_file);
+ onStatus('Хурдан харагдах зургийн хувилбар бэлдэж байна…');const prepared=await prepareImages(file);const ticket=await mediaRequest({action:'media-upload',type:file.type,size:file.size,variants:prepared.variants.map(v=>({kind:v.kind,size:v.size}))});
+ onStatus('Эх зургийг R2 рүү оруулж байна…');let response;try{response=await fetch(ticket.url,{method:'PUT',headers:ticket.headers,body:file,signal})}catch(error){if(error.name==='AbortError')throw error;throw Error('R2 upload холбогдсонгүй. Bucket-ийн CORS дотор энэ сайтын хаяг болон PUT зөвшөөрөгдсөн эсэхийг шалгана уу.')}
+ if(!response.ok)throw Error('R2 зураг хүлээж авсангүй ('+response.status+'). API эрх, CORS болон файл хэмжээг шалгаад дахин оролдоно уу.');
+ let optimized=false;try{for(const variant of prepared.variants){const target=ticket.variants?.find(v=>v.kind===variant.kind);if(!target)throw Error();const uploaded=await fetch(target.url,{method:'PUT',headers:target.headers,body:variant.blob,signal});if(!uploaded.ok)throw Error()}optimized=prepared.variants.length===2}catch(error){if(error.name==='AbortError')throw error}
+ onStatus('R2 дээрх файлыг баталгаажуулж байна…');const result=await mediaRequest({action:'media-complete',key:ticket.key,filename:file.name,width:prepared.width,height:prepared.height,optimized});
+ if(!safeUrl(result.asset?.url))throw Error('R2 нийтийн зурагны хаяг буруу байна.');
+ Object.defineProperty(result.asset,'uploadNotice',{value:'R2-д эх хэмжээгээр хадгалсан',enumerable:false});return result.asset;
+}
+export async function importR2Page(cursor=''){
+ const page=await mediaRequest({action:'media-list',cursor});if(!Array.isArray(page.items))throw Error('R2 жагсаалтын формат буруу байна.');const result=await mergeMedia(page.items);return{...result,count:page.items.length,cursor:page.next_cursor};
+}
+export function mountR2({reload,toast,editorToken,onAudio}){
+ const $=s=>document.querySelector(s);let cursor='',importing=false,audioCursor='',audioBusy=false,audioTarget=null;
+ $('#importR2Media').addEventListener('click',async()=>{if(importing)return;importing=true;const button=$('#importR2Media');button.disabled=true;
+  try{const page=await importR2Page(cursor);cursor=page.cursor||'';await reload();button.textContent=cursor?'R2 · дараагийн 100 файл':'R2 САНГААС ЗУРАГ НЭМЭХ';toast(`${page.added} шинэ зураг санд нэмлээ. ${page.count-page.added} зураг өмнө нь байсан.`)}catch(error){toast(error.message,true)}finally{button.disabled=false;importing=false}
+ });
+ const dialog=$('#r2AudioDialog'),list=$('#r2AudioList');
+ async function loadAudio(reset=false){if(audioBusy)return;audioBusy=true;$('#r2AudioMore').disabled=true;if(reset){audioCursor='';list.replaceChildren()}$('#r2AudioStatus').textContent='MP3 санг уншиж байна…';
+  try{const page=await mediaRequest({action:'audio-list',cursor:audioCursor});if(!dialog.open)return;for(const item of page.items){const button=document.createElement('button');button.type='button';button.className='btn secondary r2-audio-item';button.textContent=item.filename+' · '+(item.bytes/1024/1024).toFixed(1)+' MB';button.addEventListener('click',()=>{if(editorToken()!==audioTarget){toast('Өгүүллэг солигдсон байна. Аудиогоо дахин сонгоно уу.',true);dialog.close();return}onAudio(item.reference);dialog.close()});list.append(button)}audioCursor=page.next_cursor||'';$('#r2AudioMore').hidden=!audioCursor;$('#r2AudioStatus').textContent=list.children.length?'Бүтэн аудиогоо сонгоно уу. Өгүүллэгээ хадгалж баталгаажуулна.':'Аудио алга. Cloudflare-ийн хувийн audio bucket-д MP3 upload хийнэ үү.'}
+  catch(error){$('#r2AudioStatus').textContent=error.message;$('#r2AudioMore').hidden=false}finally{audioBusy=false;$('#r2AudioMore').disabled=false}
+ }
+ $('#chooseR2Audio').addEventListener('click',()=>{audioTarget=editorToken();dialog.showModal();loadAudio(true)});$('#r2AudioClose').addEventListener('click',()=>dialog.close());$('#r2AudioMore').addEventListener('click',()=>loadAudio());
+}

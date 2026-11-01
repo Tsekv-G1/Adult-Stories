@@ -1,5 +1,5 @@
-import {$,esc,fmtPrice} from './core.js?v=8.3.0';
-import {memberRequest,apiMessage} from './customer-api.js?v=8.3.0';
+import {$,esc,fmtPrice} from './core.js?v=8.4.0';
+import {memberRequest,apiMessage} from './customer-api.js?v=8.4.0';
 export function createCheckout({memberAuth,modal,closeModal=()=>{}}){
  let busy=false,pending=null,generation=0,owner=null,rendering=false;
  function invalidate(){generation++;busy=false;owner=null;pending=null}

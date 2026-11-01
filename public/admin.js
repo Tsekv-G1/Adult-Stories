@@ -1,13 +1,15 @@
-import {optimizedImage} from './image-delivery.js?v=8.3.0';
-import {originalImageUrl} from './image-upscale.js?v=8.3.0';
-import {createDrafts} from './editor-drafts.js?v=8.3.0';
-import {audioPreview} from './private-audio.js?v=8.3.0';
-import {importCloudBackup} from './cloud-import.js?v=8.3.0';
-import {createMediaWorkspace} from './media-workspace.js?v=8.3.0';
-import {CONFIG,online,$,$$,esc,overlayCSS,overlayDefault,safeUrl,getData,getBody,saveStory,removeStory,saveSite,saveAsset,updateAsset,removeAsset,uploadCloudinary,session,signIn,signOut,isAdmin,persistenceInfo,importLocalBackup} from './core.js?v=8.3.0';
-import {visualDefault,cloudSettings,visualFor,cropFor,applyPhoto,audioSeconds,clockDuration,automaticSlug,automaticPublishAt,measureAudio} from './studio.js?v=8.3.0';
-const upscaleCheckbox=document.getElementById('autoUpscaleImages');if(upscaleCheckbox)upscaleCheckbox.checked=CONFIG.autoUpscaleImages!==false;
+import {mountR2} from './r2-media.js?v=8.4.0';
+import {optimizedImage} from './image-delivery.js?v=8.4.0';
+import {originalImageUrl} from './image-upscale.js?v=8.4.0';
+import {createDrafts} from './editor-drafts.js?v=8.4.0';
+import {audioPreview} from './private-audio.js?v=8.4.0';
+import {importCloudBackup} from './cloud-import.js?v=8.4.0';
+import {createMediaWorkspace} from './media-workspace.js?v=8.4.0';
+import {CONFIG,online,$,$$,esc,overlayCSS,overlayDefault,safeUrl,getData,getBody,saveStory,removeStory,saveSite,saveAsset,updateAsset,removeAsset,uploadCloudinary,session,signIn,signOut,isAdmin,persistenceInfo,importLocalBackup} from './core.js?v=8.4.0';
+import {visualDefault,cloudSettings,visualFor,cropFor,applyPhoto,audioSeconds,clockDuration,automaticSlug,automaticPublishAt,measureAudio} from './studio.js?v=8.4.0';
+const upscaleCheckbox=document.getElementById('autoUpscaleImages');if(upscaleCheckbox){upscaleCheckbox.checked=CONFIG.autoUpscaleImages!==false;if(CONFIG.mediaProvider==='r2')upscaleCheckbox.closest('label').hidden=true;}
 let mediaWorkspace=null;
+if(CONFIG.mediaProvider==='r2')document.documentElement.classList.add('storage-r2');
 let data=null,active='overview',editing=null,returnSlot=null,editingAssetId=null,pendingImport=null;
 let storyOverlay=overlayDefault(),homeOverlay=overlayDefault(),themeDraft=visualDefault();
 let storySaving=false;
@@ -129,7 +131,7 @@ function previewPayload(scope){
  return {type:'adult-studio-preview',data:{site,stories:rows,assets:data.assets,bodies:[]},view:previewViews[scope],storyId:scope==='story'&&draft.title?currentId:site.featured_story_id||rows[0]?.id};
 }
 function fitPreview(scope){const frame=$(`[data-preview-frame="${scope}"]`),stage=frame.parentElement;if(!stage.clientWidth)return;const width=previewModes[scope]==='mobile'?390:window.innerWidth,height=previewModes[scope]==='mobile'?800:840,scale=Math.min(1,stage.clientWidth/width);frame.style.width=width+'px';frame.style.height=height+'px';frame.style.transform=`scale(${scale})`;frame.style.left=Math.max(0,(stage.clientWidth-width*scale)/2)+'px';stage.style.height=Math.ceil(height*scale)+'px';frame.closest('.site-preview').querySelector('.preview-caption').textContent=`${width} px · ${previewModes[scope]==='mobile'?'Утас':'Desktop'} · Preview дотор scroll хийж болно.`;$$(`[data-preview-scope="${scope}"]`).forEach(b=>b.classList.toggle('active',b.dataset.viewport===previewModes[scope]))}
-function renderPreviews(){if(!data)return;for(const scope of ['story','home','design']){const frame=$(`[data-preview-frame="${scope}"]`);if(!frame.closest('[data-section]').classList.contains('active')||(scope==='story'&&$('#paneCover').hidden))continue;fitPreview(scope);if(!frame.getAttribute('src'))frame.src='index.html?studio=1&v=8.3.0'+(CONFIG.localContentMode?'&local=1':'');if(frame.dataset.ready==='yes')frame.contentWindow.postMessage(previewPayload(scope),location.origin)}}
+function renderPreviews(){if(!data)return;for(const scope of ['story','home','design']){const frame=$(`[data-preview-frame="${scope}"]`);if(!frame.closest('[data-section]').classList.contains('active')||(scope==='story'&&$('#paneCover').hidden))continue;fitPreview(scope);if(!frame.getAttribute('src'))frame.src='index.html?studio=1&v=8.4.0'+(CONFIG.localContentMode?'&local=1':'');if(frame.dataset.ready==='yes')frame.contentWindow.postMessage(previewPayload(scope),location.origin)}}
 $$('[data-viewport]').forEach(b=>b.addEventListener('click',()=>{const scope=b.dataset.previewScope;previewModes[scope]=b.dataset.viewport;if(scope!=='design'){cropDevices[scope]=b.dataset.viewport;drawCropControls(scope)}queuePreviews()}));
 $$('[data-preview-view]').forEach(select=>{select.value=previewViews[select.dataset.previewView];select.addEventListener('change',()=>{previewViews[select.dataset.previewView]=select.value;queuePreviews()})});
 window.addEventListener('message',event=>{if(event.origin!==location.origin||event.data?.type!=='adult-studio-ready')return;const frame=$$('[data-preview-frame]').find(f=>f.contentWindow===event.source);if(frame){frame.dataset.ready='yes';queuePreviews()}});
@@ -166,6 +168,7 @@ mediaWorkspace=createMediaWorkspace({
  reordered:ids=>{if(editing&&ids.includes(editing.id)){editing.sort_order=ids.indexOf(editing.id)+1;$('#storyOrder').value=editing.sort_order}},
  openCover:()=>{setTab('stories');setEditorTab('cover')}
 });
+mountR2({reload,toast,editorToken:()=>editToken,onAudio:reference=>{if(!bodyReady)return toast('Өгүүллэгийн агуулга ачаалж дуусахыг хүлээнэ үү.',true);$('#storyAudioFull').value=reference;resetAudio();markStory();probeFullAudio(true)}});
 window.addEventListener('keydown',event=>{
  if(storySaving){if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s')event.preventDefault();return}
  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();if(document.querySelector('dialog[open]'))return;const button={stories:'saveStory',homepage:'saveHomepage',design:'saveDesign',settings:'saveSettings'}[active];if(button)$('#'+button).click();else toast('Хадгалах өөрчлөлт энэ хэсэгт алга.');}

@@ -15,6 +15,13 @@ exports.handler=c.endpoint(['POST'],async e=>{
   await c.rpc('adult_reset_password',{p_member:id,p_hash:digest,p_actor:actor,p_note:note});
   return c.reply(200,{ok:true,phone:member.phone,new_password:password});
  }
+ if(['media-config','media-upload','media-complete','media-list','audio-list'].includes(b.action)){
+  const r2=require('../../server/r2.cjs');
+  if(b.action==='media-config'){const s=r2.settings();return c.reply(200,{ok:true,provider:'r2',bucket:s.bucket,public_base:s.publicBase,audio_bucket:s.audio||null})}
+  if(b.action==='media-upload')return c.reply(200,{ok:true,...await r2.upload(b)});
+  if(b.action==='media-complete')return c.reply(200,{ok:true,asset:await r2.complete(b)});
+  return c.reply(200,{ok:true,...await r2.list({cursor:b.cursor||'',audio:b.action==='audio-list'})});
+ }
  if(b.action==='audio-upload')return c.reply(200,{ok:true,...await require('../../server/audio.cjs').upload(String(b.extension||''))});
  if(b.action==='audio-preview')return c.reply(200,{ok:true,url:await require('../../server/audio.cjs').sign(String(b.reference||''))});
  if(b.action==='settings')return c.reply(200,{ok:true,payment:c.payment(),cms_url:c.origin()+'/admin.html'});

@@ -1,5 +1,5 @@
-import {prepareUpscale} from './image-upscale.js?v=8.3.0';
-import {createLocalRepository} from './local-repository.js?v=8.3.0';
+import {prepareUpscale} from './image-upscale.js?v=8.4.0';
+import {createLocalRepository} from './local-repository.js?v=8.4.0';
 /* Shared store: local preview or online Supabase. No private keys are ever embedded. */
 export const CONFIG=window.ADULT_CONFIG||{};
 export const authConfigured=Boolean(CONFIG.supabaseUrl&&CONFIG.supabaseAnonKey);
@@ -80,6 +80,14 @@ export async function session(){if(!online)return null;let sb=await supa();let r
 export async function signIn(email,password){let sb=await supa();let r=await sb.auth.signInWithPassword({email,password});if(r.error)throw r.error;return r.data}
 export async function signOut(){let sb=await supa();let r=await sb.auth.signOut();if(r.error)throw r.error}
 export async function isAdmin(){if(!online)return true;let sb=await supa();let r=await sb.rpc('is_admin');if(r.error)throw r.error;return !!r.data}
+export async function mediaRequest(payload){
+ const sb=await supa();if(!sb)throw Error('R2 upload хийхдээ Netlify дээрх админаар нэвтэрнэ үү.');
+ const {data}=await sb.auth.getSession();if(!data.session)throw Error('Админаар нэвтэрнэ үү.');
+ let response;try{response=await fetch('/api/adult-admin',{method:'POST',cache:'no-store',headers:{Authorization:'Bearer '+data.session.access_token,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(30000)})}catch{throw Error('R2 сервер холбогдсонгүй. Netlify холболтоо шалгана уу.')}
+ let result;try{result=await response.json()}catch{throw Error('R2 сервер JSON хариу өгсөнгүй. Netlify дээр шинэ Functions-тай хамт deploy хийнэ үү.')}
+ if(!response.ok||!result?.ok){const {mediaError}=await import('./r2-media.js?v=8.4.0');throw Error(mediaError(result?.error))}return result;
+}
+export async function uploadImage(file,options={}){if(CONFIG.mediaProvider==='r2'){const {uploadR2}=await import('./r2-media.js?v=8.4.0');return uploadR2(file,options)}return uploadCloudinary(file,options)}
 export async function uploadCloudinary(file,{signal,upscale=CONFIG.autoUpscaleImages!==false,onStatus=()=>{}}={}){
  if(!file?.type.startsWith('image/'))throw Error('Зөвхөн зураг upload хийнэ.');
  if(file.size>25*1024*1024)throw Error('Зургийн хэмжээ 25MB-аас хэтэрлээ.');

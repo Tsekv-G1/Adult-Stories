@@ -1,8 +1,12 @@
 {
   "name": "adult-stories-online",
-  "version": "8.3.0",
+  "version": "8.4.0",
   "private": true,
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/s3-request-presigner": "3.1161.0"
   }
 }

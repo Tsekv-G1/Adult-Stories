@@ -1,5 +1,5 @@
 // Cloudinary keeps the original asset. The saved delivery URL marks an AI-derived version.
-export function originalImageUrl(raw){return String(raw||'').replace('/image/upload/e_upscale/','/image/upload/')}
+export function originalImageUrl(raw){return String(raw||'').replace('/image/upload/e_upscale/','/image/upload/').replace(/(\/cms-images\/[a-f\d-]{36}\.(?:jpg|png|webp|avif))\.(?:screen|thumb)\.webp(?=$|[?#])/i,'$1')}
 export function upscaleUrl(raw,width,height){
  try{const u=new URL(raw);if(u.protocol!=='https:'||u.hostname!=='res.cloudinary.com'||!/^\/[^/]+\/image\/upload\/(v\d+\/)?[^,]+$/.test(u.pathname)||/\.(svg|gif|pdf)$/i.test(u.pathname)||/\/upload\/s--/.test(u.pathname))return null;
  if(!(width>0&&height>0)||width*height>=4200000||Math.max(width,height)>=2000)return null;

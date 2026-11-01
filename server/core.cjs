@@ -20,7 +20,39 @@ function sessionToken(e){const v=header(e,'cookie').split(';').map(s=>s.trim()).
 async function newSession(id,expectedHash){const token=crypto.randomBytes(32).toString('hex');await rpc('adult_new_session',{p_member:id,p_expected_hash:expectedHash,p_token_hash:hash(token),p_expiry:new Date(Date.now()+2592000000).toISOString()});return cookie(token)}
 async function auth(e){const token=sessionToken(e);if(!token)fail(401,'login_required');const rows=await db('adult_sessions?token_hash=eq.'+hash(token)+'&expires_at=gt.'+encodeURIComponent(new Date().toISOString())+'&select=member_id,adult_members(id,phone,name,status)&limit=1'),u=rows?.[0]?.adult_members;if(!u||u.status!=='active')fail(401,'login_required');return u}
 async function rate(e,bucket,limit=20,seconds=900,subject=''){let ip=header(e,'x-nf-client-connection-ip');if(!ip&&/^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(origin()))ip='local';if(!ip)fail(503,'client_address_unavailable');const key=crypto.createHmac('sha256',config('SUPABASE_SERVICE_ROLE_KEY')).update(bucket+':'+(subject||ip)).digest('hex');if(!await rpc('adult_take_rate',{p_key:key,p_limit:limit,p_seconds:seconds}))fail(429,'rate_limited')}
-async function admin(e){const token=header(e,'authorization').replace(/^Bearer\s+/i,''),key=process.env.ADULT_ADMIN_KEY||'';if(key.length>=32&&token&&crypto.timingSafeEqual(Buffer.from(hash(token)),Buffer.from(hash(key))))return'hub';if(!token)fail(401,'unauthorized');let r;try{r=await fetch(config('SUPABASE_URL')+'/auth/v1/user',{headers:{apikey:config('SUPABASE_SERVICE_ROLE_KEY'),Authorization:'Bearer '+token},signal:AbortSignal.timeout(10000)})}catch{fail(503,'auth_unavailable')}if(!r.ok)fail(401,'unauthorized');const u=await r.json();if(!u?.id)fail(401,'unauthorized');if(!(await db('admin_users?user_id=eq.'+uuid(u.id)+'&select=user_id&limit=1'))?.length)fail(403,'admin_required');return u.id}
+async function admin(e){
+ const token=header(e,'authorization').replace(/^Bearer\s+/i,''),key=process.env.ADULT_ADMIN_KEY||'';
+ if(key.length>=32&&token&&crypto.timingSafeEqual(Buffer.from(hash(token)),Buffer.from(hash(key))))return 'hub';
+ if(!token)fail(401,'unauthorized');
+ // Check configuration outside the network catch. Otherwise a missing env var is
+ // misleadingly turned into auth_unavailable and is impossible to diagnose.
+ const base=config('SUPABASE_URL').trim().replace(/\/+$/,''),apiKey=config('SUPABASE_SERVICE_ROLE_KEY').trim();
+ if(!base||!apiKey)fail(503,'service_not_configured');
+ let authUrl;
+ try{
+  const u=new URL(base);
+  if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw Error('invalid_supabase_url');
+  authUrl=u.origin+'/auth/v1/user';
+ }catch{
+  console.error('adult_admin_auth_config_invalid');
+  fail(503,'service_not_configured');
+ }
+ let r;
+ try{
+  r=await fetch(authUrl,{headers:{apikey:apiKey,Authorization:'Bearer '+token},signal:AbortSignal.timeout(10000)});
+ }catch(error){
+  // Do not log URLs, credentials, tokens or the raw exception message.
+  console.error('adult_admin_auth_fetch_failed',{
+   error_type:String(error?.name||'Error').slice(0,64),
+   network_code:String(error?.cause?.code||error?.code||'UNKNOWN').slice(0,64)
+  });
+  fail(503,'auth_unavailable');
+ }
+ if(!r.ok)fail(401,'unauthorized');
+ const u=await r.json();if(!u?.id)fail(401,'unauthorized');
+ if(!(await db('admin_users?user_id=eq.'+uuid(u.id)+'&select=user_id&limit=1'))?.length)fail(403,'admin_required');
+ return u.id;
+}
 const payment=()=>({bank:process.env.PAYMENT_BANK||'Хаан Банк',account:process.env.PAYMENT_ACCOUNT||'5018953118',name:process.env.PAYMENT_ACCOUNT_NAME||'Ганбаяр Цэвэгмид',support:process.env.SUPPORT_CONTACT||'88748966'});
 async function access(member,id){const rows=await db('adult_entitlements?member_id=eq.'+uuid(member)+'&revoked_at=is.null&or=(expires_at.is.null,expires_at.gt.'+encodeURIComponent(new Date().toISOString())+')&select=story_id');return rows?.some(r=>!r.story_id||r.story_id===id)||false}
 module.exports={ApiError,fail,header,config,origin,body,reply,endpoint,db,rpc,phone,password,passwordHash,matches,uuid,cookie,sessionToken,newSession,auth,rate,admin,payment,access,hash};

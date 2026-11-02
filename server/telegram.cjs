@@ -21,4 +21,21 @@ async function notifyPayment({event,order}){
  }catch{return false}
 }
 
-module.exports={notifyPayment};
+async function notifyRegistration({member}){
+ const token=process.env.TELEGRAM_BOT_TOKEN,chatId=process.env.TELEGRAM_CHAT_ID;
+ if(!token||!chatId||!member)return false;
+ const name=String(member.name||'Нэр оруулаагүй').replace(/[<>]/g,'').slice(0,80);
+ const phone=String(member.phone||'').replace(/\D/g,'').replace(/^976/,'').slice(-8);
+ if(!phone)return false;
+ const text=`Adult Stories · Шинэ хэрэглэгч бүртгүүллээ\nНэр: ${name}\nДугаар: ${phone}`;
+ try{
+  const response=await fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({chat_id:chatId,text,disable_web_page_preview:true}),
+   signal:AbortSignal.timeout(3500)
+  });
+  return response.ok;
+ }catch{return false}
+}
+
+module.exports={notifyPayment,notifyRegistration};

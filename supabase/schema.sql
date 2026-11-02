@@ -125,6 +125,8 @@ insert into public.site_settings (id,content) values (
    'hero_overlay',jsonb_build_object('red',42,'dark',55,'x',50,'y',50,'direction',105,'tint','#db123a','fit','cover'),
    'categories',jsonb_build_array('Нууцлаг','Романтик','Триллер'),
    'membership_price',29900,
+   'membership_first_price',24900,
+   'membership_list_price',34900,
    'seo_title','ADULT Stories — Өгүүллэгийн сан',
    'seo_description','Насанд хүрэгчдэд зориулсан өгүүллэг, аудио preview.'
  )

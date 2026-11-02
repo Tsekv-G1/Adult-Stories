@@ -31,8 +31,9 @@ on conflict(member_id) do nothing;
 
 update public.site_settings
 set content=jsonb_set(
-  jsonb_set(content,'{membership_first_price}',coalesce(content->'membership_first_price','24900'::jsonb),true),
-  '{membership_price}',coalesce(content->'membership_price','29900'::jsonb),true)
+  jsonb_set(jsonb_set(content,'{membership_first_price}',coalesce(content->'membership_first_price','24900'::jsonb),true),
+  '{membership_price}',coalesce(content->'membership_price','29900'::jsonb),true),
+  '{membership_list_price}',coalesce(content->'membership_list_price','34900'::jsonb),true)
 where id='main';
 
 create or replace function public.adult_create_order(
@@ -41,6 +42,7 @@ create or replace function public.adult_create_order(
 declare
   o public.adult_payment_orders;
   cost integer;
+  list_cost integer;
   published_at timestamptz;
   member_phone text;
   phone_digits text;
@@ -66,7 +68,9 @@ begin
     if days=7 then
       select coalesce((content->>'membership_week_price')::integer,9900) into cost from public.site_settings where id='main';
     elsif first_purchase then
-      select coalesce((content->>'membership_first_price')::integer,24900) into cost from public.site_settings where id='main';
+      select coalesce((content->>'membership_first_price')::integer,24900),
+             coalesce((content->>'membership_list_price')::integer,34900)
+        into cost,list_cost from public.site_settings where id='main';
       intro_offer:=true;
     else
       select coalesce((content->>'membership_price')::integer,29900) into cost from public.site_settings where id='main';
@@ -80,7 +84,7 @@ begin
     if o.status='pending' and (o.amount<>cost or o.first_purchase_offer<>intro_offer) then
       update public.adult_payment_orders set amount=cost,first_purchase_offer=intro_offer where id=o.id returning * into o;
     end if;
-    return to_jsonb(o);
+    return to_jsonb(o)||jsonb_build_object('list_price',case when o.first_purchase_offer then coalesce(list_cost,34900) else null end);
   end if;
   select * into o from public.adult_payment_orders where member_id=p_member_id and kind=p_kind
    and story_id is not distinct from p_story_id and membership_days is not distinct from days and status='pending'
@@ -89,11 +93,11 @@ begin
     if o.amount<>cost or o.first_purchase_offer<>intro_offer then
       update public.adult_payment_orders set amount=cost,first_purchase_offer=intro_offer where id=o.id returning * into o;
     end if;
-    return to_jsonb(o);
+    return to_jsonb(o)||jsonb_build_object('list_price',case when o.first_purchase_offer then coalesce(list_cost,34900) else null end);
   end if;
   insert into public.adult_payment_orders(member_id,client_id,kind,story_id,membership_days,amount,memo,first_purchase_offer)
    values(p_member_id,p_client_id,p_kind,p_story_id,days,cost,phone_digits,intro_offer) returning * into o;
-  return to_jsonb(o);
+  return to_jsonb(o)||jsonb_build_object('list_price',case when o.first_purchase_offer then coalesce(list_cost,34900) else null end);
 end $$;
 
 create or replace function public.adult_decide_order(
@@ -107,7 +111,7 @@ begin
   if p_approve and receipt<>'' and length(receipt)<4 then raise exception 'invalid_bank_reference';end if;
   select * into o from public.adult_payment_orders where id=p_order_id for update;
   if not found then raise exception 'invalid_order';end if;
-  if o.status='approved' and p_approve then return to_jsonb(o);end if;
+  if o.status='approved' and p_approve then return to_jsonb(o)||jsonb_build_object('list_price',case when o.first_purchase_offer then coalesce(list_cost,34900) else null end);end if;
   if o.status<>'pending' then raise exception 'order_not_pending';end if;
   if p_approve then
     -- Serialize approvals per customer so two concurrent orders cannot both consume the offer.
@@ -130,7 +134,7 @@ begin
   end if;
   insert into public.adult_audit(actor,action,order_id,note)
     values(p_actor,case when p_approve then 'approve' else 'reject' end,o.id,audit_note);
-  return to_jsonb(o);
+  return to_jsonb(o)||jsonb_build_object('list_price',case when o.first_purchase_offer then coalesce(list_cost,34900) else null end);
 exception when unique_violation then
   get stacked diagnostics v_constraint_name=CONSTRAINT_NAME;
   if v_constraint_name='adult_payment_orders_bank_reference_key' then raise exception 'receipt_already_used';end if;

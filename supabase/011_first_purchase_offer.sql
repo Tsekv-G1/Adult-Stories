@@ -1,4 +1,5 @@
--- One-time introductory membership price. Apply after 010_optional_payment_decision_fields.sql.
+-- One-time introductory membership price. Apply after 005_membership_passes.sql
+-- (after 007_story_series.sql if that migration is installed).
 -- First-time eligibility is recorded only after any payment is approved.
 begin;
 
@@ -13,6 +14,12 @@ create table if not exists public.adult_first_purchase_redemptions (
 alter table public.adult_first_purchase_redemptions enable row level security;
 revoke all on public.adult_first_purchase_redemptions from public,anon,authenticated;
 grant all on public.adult_first_purchase_redemptions to service_role;
+
+-- Clean up older pending transfer memos so they contain only the member's local number.
+update public.adult_payment_orders o
+set memo=right(regexp_replace(m.phone,'[^0-9]','','g'),8)
+from public.adult_members m
+where o.member_id=m.id and o.status='pending';
 
 -- Preserve prior customers as already having used their first-purchase offer.
 insert into public.adult_first_purchase_redemptions(member_id,order_id,redeemed_at)

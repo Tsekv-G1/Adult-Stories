@@ -46,7 +46,7 @@ async function list({cursor='',audio=false}={}){
  return {items:objects.map(o=>audio?{key:o.Key,filename:o.Key.split('/').pop(),bytes:o.Size||0,reference:s.endpoint+'/'+bucket+'/'+encoded(o.Key)}:asset(o.Key,{bytes:o.Size||0})),next_cursor:result.IsTruncated?result.NextContinuationToken||null:null};
 }
 async function audioOutputTargets(storyId){
- const s=settings();if(!s.audio)c.fail(503,'r2_audio_not_configured');
+ const s=settings();
  if(!/^[a-f\d-]{36}$/i.test(storyId||''))c.fail(400,'invalid_id');
  const nonce=crypto.randomUUID(),fullKey=`generated/${storyId}/${nonce}.mp3`,previewKey=`audio-preview/${storyId}/${nonce}.mp3`;
  try{
@@ -57,4 +57,10 @@ async function audioOutputTargets(storyId){
   return {full_put_url:fullPut,full_reference:`${s.endpoint}/${encodeURIComponent(s.audio)}/${fullKey.split('/').map(encodeURIComponent).join('/')}`,preview_put_url:previewPut,preview_url:publicUrl(previewKey)};
  }catch(e){if(e instanceof c.ApiError)throw e;c.fail(503,'r2_upload_unavailable')}
 }
-module.exports={settings,client,upload,complete,list,publicUrl,privatePath,signedAudio,audioOutputTargets,validKey};
+async function audioPreviewTarget(storyId){
+ const s=settings();
+ if(!/^[a-f\d-]{36}$/i.test(storyId||''))c.fail(400,'invalid_id');
+ const key=`audio-preview/${storyId}/${crypto.randomUUID()}.mp3`;
+ try{return{put_url:await getSignedUrl(client(),new PutObjectCommand({Bucket:s.bucket,Key:key,ContentType:'audio/mpeg'}),{expiresIn:3600}),url:publicUrl(key)}}catch(e){if(e instanceof c.ApiError)throw e;c.fail(503,'r2_upload_unavailable')}
+}
+module.exports={settings,client,upload,complete,list,publicUrl,privatePath,signedAudio,audioOutputTargets,audioPreviewTarget,validKey};

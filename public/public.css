@@ -124,6 +124,14 @@ html:has(.public-site){scroll-padding-top:105px}
 }
 @media(max-width:360px){.audio-art{display:none}.public-site .audio-player{column-gap:6px}.audio-controls{gap:0}.account-button{padding-inline:10px}.header-actions{gap:3px}.public-site .site-nav{padding-inline:14px}.public-site .hero-cta .btn{padding-inline:10px;font-size:10px}.public-site .story-actions .plain-btn{font-size:10px}.public-site .story-actions .save-action{min-width:24px}.public-site .story-actions{gap:4px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.public-site *{transition:none!important;scroll-behavior:auto!important}}
+/* A clear audio-first action keeps story cards recognizable as listenable. */
+.public-site .story-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.public-site .story-actions .plain-btn.audio{grid-column:1/-1;width:100%;min-height:50px;padding:0 16px;border:1px solid #ff6b8c;background:linear-gradient(110deg,#a80c35,#f2144a);box-shadow:0 8px 24px #e2124530;color:#fff;font-size:13px;font-weight:850;letter-spacing:.04em;text-align:center}
+.public-site .story-actions .plain-btn.audio:hover,.public-site .story-actions .plain-btn.audio:focus-visible{background:linear-gradient(110deg,#bf103f,#ff2858);box-shadow:0 10px 28px #e2124550;text-decoration:none;transform:translateY(-1px)}
+.public-site .story-actions .plain-btn.audio.is-playing{background:#25131c;border-color:#ff6a8c;color:#ffadc0;box-shadow:none}
+.public-site .story-actions .save-action{justify-self:end;min-width:44px;min-height:44px}
+@media(max-width:520px){.public-site .story-actions{grid-template-columns:minmax(0,1fr) auto;gap:7px}.public-site .story-actions .plain-btn.audio{min-height:52px;font-size:13px;padding-inline:12px}.public-site .story-actions .plain-btn:not(.audio){min-height:44px}}
+@media(max-width:360px){.public-site .story-actions .plain-btn.audio{font-size:12px;letter-spacing:.015em}}
 /* V7 immersive cover: one continuous image, with editable copy layered over it. */
 .public-site .site-hero{display:block;position:relative;min-height:650px;margin-top:24px;border-color:#4b2334;border-radius:18px;isolation:isolate;background:#130b12}
 .public-site .hero-image{position:absolute;inset:0;min-height:100%;z-index:0}

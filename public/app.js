@@ -1,11 +1,11 @@
 import {deliverImage,excerptText,optimizedImage} from './image-delivery.js?v=8.8.0';
 import {createLibrary} from './member-library.js?v=8.10.0';
 import {memberRequest} from './customer-api.js?v=8.10.0';
-import {createCheckout} from './checkout.js?v=8.10.0';
+import {createCheckout} from './checkout.js?v=8.11.0';
 import {getData,getBody,CONFIG,online,esc,$,$$,overlayCSS,fmtPrice,textParas,subscribeChanges,defaults,safeUrl} from './core.js?v=8.8.0';
 import {visualFor,applyPhoto,durationLabel,audioSeconds} from './studio.js?v=8.8.0';
 import {createAudioPlayer} from './audio-player.js?v=8.8.0';
-import {createMemberAuth} from './member-auth.js?v=8.10.0';
+import {createMemberAuth} from './member-auth.js?v=8.11.0';
 import {recordStoryActivity,loadStoryMetrics} from './story-activity.js?v=8.8.0';
 const studioMode=new URLSearchParams(location.search).get('studio')==='1'&&window.parent!==window;
 const mobileViewport=window.matchMedia('(max-width:690px)');

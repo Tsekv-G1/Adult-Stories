@@ -2,7 +2,7 @@
 
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {notifyPayment}=require('../server/telegram.cjs');
+const {notifyPayment,notifyRegistration}=require('../server/telegram.cjs');
 
 const saved={token:process.env.TELEGRAM_BOT_TOKEN,chat:process.env.TELEGRAM_CHAT_ID,fetch:global.fetch};
 function restore(){if(saved.token===undefined)delete process.env.TELEGRAM_BOT_TOKEN;else process.env.TELEGRAM_BOT_TOKEN=saved.token;if(saved.chat===undefined)delete process.env.TELEGRAM_CHAT_ID;else process.env.TELEGRAM_CHAT_ID=saved.chat;global.fetch=saved.fetch}
@@ -33,6 +33,17 @@ test('Telegram payment notices show the selected membership duration',async()=>{
 test('Telegram errors are best effort and do not reject payment action callers',async()=>{
  process.env.TELEGRAM_BOT_TOKEN='test-only-token';process.env.TELEGRAM_CHAT_ID='test-chat';global.fetch=async()=>{throw Error('network failure')};
  assert.equal(await notifyPayment({event:'approved',order:{id:'12345678-abcd',kind:'story',amount:9900}}),false);
+});
+
+test('successful member registration sends a minimal server-side notice without a password',async()=>{
+ process.env.TELEGRAM_BOT_TOKEN='test-only-token';process.env.TELEGRAM_CHAT_ID='test-chat';let request;
+ global.fetch=async(url,options)=>{request={url,options};return{ok:true}};
+ assert.equal(await notifyRegistration({member:{name:'Test Member',phone:'+97688748966',password_hash:'must-not-be-sent'}}),true);
+ assert.match(request.url,/api\.telegram\.org\/bottest-only-token\/sendMessage/);
+ const body=JSON.parse(request.options.body);
+ assert.equal(body.chat_id,'test-chat');assert.match(body.text,/Шинэ хэрэглэгч бүртгүүллээ/);
+ assert.match(body.text,/88748966/);assert.match(body.text,/Test Member/);
+ assert.doesNotMatch(body.text,/must-not-be-sent/);
 });
 
 test('unknown notification events are ignored',async()=>{

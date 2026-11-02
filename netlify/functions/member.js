@@ -20,7 +20,7 @@ exports.handler=c.endpoint(['GET','POST'],async e=>{
  }
  if(e.httpMethod==='POST'&&['register','login'].includes(action)){
   await c.rate(e,action,action==='register'?8:40);const phone=c.phone(b.phone);if(action==='login')await c.rate(e,'login-phone',15,900,phone);let row;
-  if(action==='register'){const digest=await c.passwordHash(b.password);row=(await c.db('adult_members',{method:'POST',data:{phone,name:String(b.name||'').trim().slice(0,80),password_hash:digest},prefer:'return=representation'}))[0]}
+  if(action==='register'){const digest=await c.passwordHash(b.password);row=(await c.db('adult_members',{method:'POST',data:{phone,name:String(b.name||'').trim().slice(0,80),password_hash:digest},prefer:'return=representation'}))[0];await require('../../server/telegram.cjs').notifyRegistration({member:row})}
   else{row=(await c.db('adult_members?phone=eq.'+encodeURIComponent(phone)+'&select=id,phone,name,status,password_hash&limit=1'))?.[0];if(!await c.matches(b.password,row?.password_hash)||row.status!=='active')c.fail(401,'invalid_credentials')}
   return c.reply(action==='register'?201:200,{ok:true,user:{id:row.id,phone:row.phone,name:row.name}},{'Set-Cookie':await c.newSession(row.id,row.password_hash)});
  }

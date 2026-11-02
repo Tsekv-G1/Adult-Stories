@@ -40,6 +40,8 @@ create table if not exists public.stories (
   id uuid primary key default gen_random_uuid(),
   slug text not null unique check(length(slug) between 1 and 120),
   title text not null check(length(title)>0),
+  series_title text not null default '',
+  series_order integer,
   category text not null default 'Нууцлаг',
   excerpt text not null default '',
   preview_text text not null default '',
@@ -54,8 +56,11 @@ create table if not exists public.stories (
   audio_preview_url text not null default '',
   publish_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint stories_series_order_check check ((series_title='' and series_order is null) or (length(trim(series_title))>0 and series_order>=1))
 );
+create index if not exists stories_series_order_idx on public.stories(lower(series_title),series_order) where series_title<>'';
+create unique index if not exists stories_series_order_unique_idx on public.stories(lower(series_title),series_order) where series_title<>'';
 
 -- Crucial: do NOT put the paid body in the anonymous-readable stories table.
 create table if not exists public.story_private (

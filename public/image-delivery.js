@@ -1,4 +1,4 @@
-import {originalImageUrl} from './image-upscale.js?v=8.4.0';
+import {originalImageUrl} from './image-upscale.js?v=8.5.0';
 // Original media URLs stay intact in storage/CMS. Delivery variants are width limited and cached by the CDN.
 export function optimizedImage(raw,width=720){
  try{const u=new URL(raw);if(/\/cms-images\/[a-f\d-]{36}\.(jpg|png|webp|avif)\.screen\.webp$/i.test(u.pathname))return width<=800?raw.replace(/\.screen\.webp(?=$|[?#])/i,'.thumb.webp'):raw;if(u.protocol!=='https:'||u.hostname!=='res.cloudinary.com')return raw;const match=u.pathname.match(/^(\/[^/]+\/image\/upload\/)(.+)$/);if(!match||/^s--/.test(match[2])||/\.svg$/i.test(u.pathname))return raw;

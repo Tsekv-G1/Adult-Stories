@@ -1,6 +1,6 @@
-import {optimizedImage} from './image-delivery.js?v=8.4.0';
-import {originalImageUrl} from './image-upscale.js?v=8.4.0';
-import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadImage,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=8.4.0';
+import {optimizedImage} from './image-delivery.js?v=8.5.0';
+import {originalImageUrl} from './image-upscale.js?v=8.5.0';
+import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadImage,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=8.5.0';
 const MEDIA='application/x-adult-media',STORY='application/x-adult-story';
 export function createMediaWorkspace(o){
  const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],selected=new Set(),tasks=[];
@@ -15,7 +15,7 @@ export function createMediaWorkspace(o){
    $(`#${scope}AssetGrid`).innerHTML=items.length?items.map(a=>`<div class="asset-choice" role="listitem" draggable="true" data-media-id="${esc(a.id)}"><button type="button" class="${id===a.id?'selected':''}" data-picker-select="${esc(a.id)}" data-scope="${scope}" aria-pressed="${id===a.id}" aria-label="${esc(a.filename||'Зураг')} сонгох"><img src="${esc(optimizedImage(a.url,320))}" alt="${esc(a.alt_text||a.filename||'Зураг')}" style="filter:${imageStyle()}" loading="lazy" draggable="false"><span class="choice-name">${esc(a.filename||'Зураг')}</span>${id===a.id?'<span class="choice-tick">✓</span>':''}</button></div>`).join(''):'<div class="empty">'+(assets().length?'Хайлтад тохирох зураг алга.':'Зургийн сан хоосон байна. Файлуудаа энд чирж оруулна уу.')+'</div>';
   }
  }
- function updateSelected(){for(const id of selected)if(!asset(id))selected.delete(id);$('#selectedMediaCount').textContent=`${selected.size} сонгосон`;$('#exportSelectedMedia').disabled=!selected.size;$$('#mediaGrid [data-media-id]').forEach(card=>{card.classList.toggle('media-selected',selected.has(card.dataset.mediaId));const checkbox=card.querySelector('[data-media-check]');if(checkbox)checkbox.checked=selected.has(card.dataset.mediaId)})}
+ function updateSelected(){for(const id of selected)if(!asset(id))selected.delete(id);$('#selectedMediaCount').textContent=`${selected.size} сонгосон`;$('#exportSelectedMedia').disabled=!selected.size;$('#deleteSelectedMedia').disabled=!selected.size;$$('#mediaGrid [data-media-id]').forEach(card=>{card.classList.toggle('media-selected',selected.has(card.dataset.mediaId));const checkbox=card.querySelector('[data-media-check]');if(checkbox)checkbox.checked=selected.has(card.dataset.mediaId)})}
  function render(){
   if(!data())return;const items=filtered($('#mediaSearch').value);
   $('#assetCount').textContent=`${assets().length} зураг · ${items.length} харагдаж байна`;
@@ -60,6 +60,18 @@ export function createMediaWorkspace(o){
   if(button.dataset.removeMedia){if(!confirm('Зургийг CMS сангаас хасах уу? Хадгалсан эх файл хадгалагдана.'))return;try{await removeAsset(id);o.removed(id);await o.reload();render();o.toast('Сангаас хаслаа. Хадгалсан эх файл хэвээр.')}catch(e){o.toast(e.message,true)}}
  });
  $('#mediaGrid').addEventListener('change',event=>{const box=event.target.closest('[data-media-check]');if(!box)return;box.checked?selected.add(box.dataset.mediaCheck):selected.delete(box.dataset.mediaCheck);updateSelected()});
+ $('#deleteSelectedMedia').addEventListener('click',async()=>{
+  const chosen=assets().filter(a=>selected.has(a.id));if(!chosen.length)return;
+  const site=data().site||{},stories=data().stories||[],used=chosen.filter(a=>site.hero_asset_id===a.id||stories.some(s=>s.cover_id===a.id)),removable=chosen.filter(a=>!used.includes(a));
+  if(!removable.length)return o.toast(`${used.length} зураг одоо Hero эсвэл өгүүллэгт ашиглагдаж байна. Эхлээд тэдгээрээс салгана уу.`,true);
+  const button=$('#deleteSelectedMedia'),label=button.textContent;
+  if(!confirm(`${removable.length} ашиглагдаагүй зургийг CMS сангаас хасах уу? R2 дээрх эх файлууд үлдэнэ.${used.length?` ${used.length} ашиглагдаж буй зураг хасагдахгүй.`:''}`))return;
+  button.disabled=true;let removed=0,error=null;
+  for(const a of removable){try{await removeAsset(a.id);selected.delete(a.id);removed++}catch(e){error=e;break}}
+  try{await o.reload()}catch(e){error=error||e}render();button.textContent=label;
+  if(error)o.toast(`${removed} зураг хаслаа. Үлдсэн сонголтыг шалгаад дахин оролдоно уу: ${error.message}`,true);
+  else o.toast(`${removed} зургийг сангаас хаслаа${used.length?` · ${used.length} ашиглагдаж буйг алгасав`:''}.`);
+ });
  $('#assetEditSave').addEventListener('click',async()=>{const a=asset(editingAssetId);if(!a)return;try{await updateAsset({id:a.id,filename:$('#assetEditName').value.trim()||a.filename,alt_text:$('#assetEditAlt').value.trim()});$('#assetEditModal').classList.add('hidden');await o.reload();render();o.toast('Зургийн мэдээлэл хадгалагдлаа')}catch(e){o.toast(e.message,true)}});
  $('#assetEditClose').addEventListener('click',()=>$('#assetEditModal').classList.add('hidden'));$('#assetEditModal').addEventListener('click',e=>{if(e.target.id==='assetEditModal')$('#assetEditModal').classList.add('hidden')});
  $('#mediaSearch').addEventListener('input',render);$('#selectVisibleMedia').addEventListener('click',()=>{filtered($('#mediaSearch').value).forEach(a=>selected.add(a.id));updateSelected()});$('#clearSelectedMedia').addEventListener('click',()=>{selected.clear();updateSelected()});

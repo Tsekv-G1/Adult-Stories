@@ -113,9 +113,9 @@ begin
  s:=jsonb_populate_record(null::public.stories,p_story);s.id:=coalesce(s.id,gen_random_uuid());
  select * into existing from public.stories where id=s.id for update;
  if found and p_expected_updated_at is not null and existing.updated_at<>p_expected_updated_at then raise exception 'story_changed_elsewhere';end if;
- insert into public.stories(id,slug,title,category,excerpt,preview_text,author,status,price,read_minutes,sort_order,tags,cover_id,overlay,audio_preview_url,publish_at)
- values(s.id,s.slug,s.title,coalesce(s.category,''),coalesce(s.excerpt,''),coalesce(s.preview_text,''),coalesce(s.author,'ADULT Stories'),coalesce(s.status,'draft'),coalesce(s.price,9900),coalesce(s.read_minutes,1),coalesce(s.sort_order,100),coalesce(s.tags,'{}'),s.cover_id,coalesce(s.overlay,'{}'),coalesce(s.audio_preview_url,''),s.publish_at)
- on conflict(id)do update set slug=excluded.slug,title=excluded.title,category=excluded.category,excerpt=excluded.excerpt,preview_text=excluded.preview_text,status=excluded.status,price=excluded.price,read_minutes=excluded.read_minutes,sort_order=excluded.sort_order,tags=excluded.tags,cover_id=excluded.cover_id,overlay=excluded.overlay,audio_preview_url=excluded.audio_preview_url,publish_at=excluded.publish_at
+ insert into public.stories(id,slug,title,series_title,series_order,category,excerpt,preview_text,author,status,price,read_minutes,sort_order,tags,cover_id,overlay,audio_preview_url,publish_at)
+ values(s.id,s.slug,s.title,coalesce(s.series_title,''),s.series_order,coalesce(s.category,''),coalesce(s.excerpt,''),coalesce(s.preview_text,''),coalesce(s.author,'ADULT Stories'),coalesce(s.status,'draft'),coalesce(s.price,9900),coalesce(s.read_minutes,1),coalesce(s.sort_order,100),coalesce(s.tags,'{}'),s.cover_id,coalesce(s.overlay,'{}'),coalesce(s.audio_preview_url,''),s.publish_at)
+ on conflict(id)do update set slug=excluded.slug,title=excluded.title,series_title=excluded.series_title,series_order=excluded.series_order,category=excluded.category,excerpt=excluded.excerpt,preview_text=excluded.preview_text,status=excluded.status,price=excluded.price,read_minutes=excluded.read_minutes,sort_order=excluded.sort_order,tags=excluded.tags,cover_id=excluded.cover_id,overlay=excluded.overlay,audio_preview_url=excluded.audio_preview_url,publish_at=excluded.publish_at
  returning * into result;
  if p_body is not null then
   insert into public.story_private(story_id,full_text,full_audio_url)

@@ -1,5 +1,5 @@
-import {prepareUpscale} from './image-upscale.js?v=8.4.0';
-import {createLocalRepository} from './local-repository.js?v=8.4.0';
+import {prepareUpscale} from './image-upscale.js?v=8.5.0';
+import {createLocalRepository} from './local-repository.js?v=8.5.0';
 /* Shared store: local preview or online Supabase. No private keys are ever embedded. */
 export const CONFIG=window.ADULT_CONFIG||{};
 export const authConfigured=Boolean(CONFIG.supabaseUrl&&CONFIG.supabaseAnonKey);
@@ -24,7 +24,7 @@ const samples=[
  ['window','Цонхны цаана','Романтик','Хоёр хөршийн шөнийн танилцал.','Хоёр цонх шөнө бүр нэгэн зэрэг гэрэлтдэг байлаа. Тэр өдөр бүр ижилхэн хөгжим сонсогдохыг анзаарсан боловч хэн тавьдагийг мэдэхгүй байв.','Нэг орой нөгөө цонхонд “Энэ дуу танд таалагддаг уу?” гэсэн бичиг гарч иржээ. Энэ нь тэдний анхны яриа байв.'],
  ['secret','Арван хоёр дахь цаг','Триллер','Цагны зүү зогсоход нууц эхэлнэ.','Хонгилын хуучин цаг шөнө дунд болохоор зогсдог байв. Өмнөх эзэн цагийг засаж болохгүй гэж сануулсан ч тэр тоогоогүй.','Гэрэл анивчихад дээр давхраас алхах чимээ сонсогдлоо. Тэр болгоомжтой шатаар өгсөхөд үүдний өмнө түлхүүр хэвтэж байв.']
 ];
-export function defaults(){return {site:{id:'main',brand:'ADULT STORIES',hero_heading:'ШӨНИЙН',hero_accent:'ХҮСЭЛ ЭНДЭЭС.',hero_kicker:'ӨГҮҮЛЛЭГИЙН ШИНЭ МЭДРЭМЖ',hero_description:'Нэг л мөр таны дараагийн руу татна. Сэтгэл хөдөлгөх түүхийн эхлэлийг үнэгүй уншиж, богино preview-г сонсоод, үргэлжлэлийг өөрөө нээгээрэй.',hero_asset_id:null,featured_story_id:'train',hero_overlay:overlayDefault(),membership_price:29900,announcement:'Нууцлаг түүхүүд. Үнэгүй эхлэл. Таны сонголт.',categories:['Нууцлаг','Романтик','Триллер'],seo_title:'ADULT Stories — Өгүүллэгийн сан',seo_description:'Насанд хүрэгчдэд зориулсан өгүүллэг болон аудио preview.'},assets:[],stories:samples.map((s,i)=>({id:s[0],slug:s[0],title:s[1],category:s[2],excerpt:s[3],preview_text:s[4],status:'published',cover_id:null,overlay:overlayDefault(),price:9900,read_minutes:8+i,sort_order:i+1,featured:i===0,publish_at:null,author:'ADULT Stories',tags:[],audio_preview_url:'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()})),bodies:samples.map(s=>({story_id:s[0],full_text:s[5],full_audio_url:''}))};}
+export function defaults(){return {site:{id:'main',brand:'ADULT STORIES',hero_heading:'ШӨНИЙН',hero_accent:'ХҮСЭЛ ЭНДЭЭС.',hero_kicker:'ӨГҮҮЛЛЭГИЙН ШИНЭ МЭДРЭМЖ',hero_description:'Нэг л мөр таны дараагийн руу татна. Сэтгэл хөдөлгөх түүхийн эхлэлийг үнэгүй уншиж, богино preview-г сонсоод, үргэлжлэлийг өөрөө нээгээрэй.',hero_asset_id:null,featured_story_id:'train',hero_overlay:overlayDefault(),membership_price:29900,membership_week_price:9900,announcement:'Нууцлаг түүхүүд. Үнэгүй эхлэл. Таны сонголт.',categories:['Нууцлаг','Романтик','Триллер'],seo_title:'ADULT Stories — Өгүүллэгийн сан',seo_description:'Насанд хүрэгчдэд зориулсан өгүүллэг болон аудио preview.'},assets:[],stories:samples.map((s,i)=>({id:s[0],slug:s[0],title:s[1],category:s[2],excerpt:s[3],preview_text:s[4],status:'published',cover_id:null,overlay:overlayDefault(),price:9900,read_minutes:8+i,sort_order:i+1,featured:i===0,publish_at:null,author:'ADULT Stories',tags:[],audio_preview_url:'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()})),bodies:samples.map(s=>({story_id:s[0],full_text:s[5],full_audio_url:''}))};}
 function parseLocal(){
  try{const got=JSON.parse(localStorage.getItem(DB_KEY)||'null');if(got&&Array.isArray(got.stories))return got}catch{}
  // Best-effort migration from V4 Media Studio, only when origins share localStorage.
@@ -85,9 +85,9 @@ export async function mediaRequest(payload){
  const {data}=await sb.auth.getSession();if(!data.session)throw Error('Админаар нэвтэрнэ үү.');
  let response;try{response=await fetch('/api/adult-admin',{method:'POST',cache:'no-store',headers:{Authorization:'Bearer '+data.session.access_token,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(30000)})}catch{throw Error('R2 сервер холбогдсонгүй. Netlify холболтоо шалгана уу.')}
  let result;try{result=await response.json()}catch{throw Error('R2 сервер JSON хариу өгсөнгүй. Netlify дээр шинэ Functions-тай хамт deploy хийнэ үү.')}
- if(!response.ok||!result?.ok){const {mediaError}=await import('./r2-media.js?v=8.4.0');throw Error(mediaError(result?.error))}return result;
+ if(!response.ok||!result?.ok){const {mediaError}=await import('./r2-media.js?v=8.5.0');throw Error(mediaError(result?.error))}return result;
 }
-export async function uploadImage(file,options={}){if(CONFIG.mediaProvider==='r2'){const {uploadR2}=await import('./r2-media.js?v=8.4.0');return uploadR2(file,options)}return uploadCloudinary(file,options)}
+export async function uploadImage(file,options={}){if(CONFIG.mediaProvider==='r2'){const {uploadR2}=await import('./r2-media.js?v=8.5.0');return uploadR2(file,options)}return uploadCloudinary(file,options)}
 export async function uploadCloudinary(file,{signal,upscale=CONFIG.autoUpscaleImages!==false,onStatus=()=>{}}={}){
  if(!file?.type.startsWith('image/'))throw Error('Зөвхөн зураг upload хийнэ.');
  if(file.size>25*1024*1024)throw Error('Зургийн хэмжээ 25MB-аас хэтэрлээ.');

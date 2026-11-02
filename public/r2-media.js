@@ -1,4 +1,4 @@
-import {mediaRequest,mergeMedia,safeUrl} from './core.js?v=8.4.0';
+import {mediaRequest,mergeMedia,safeUrl} from './core.js?v=8.5.0';
 export const r2Messages={r2_not_configured:'R2 тохиргоо дутуу байна. Netlify-ийн R2 хувьсагчдыг шалгаад дахин deploy хийнэ үү.',r2_buckets_must_differ:'Зураг болон хувийн аудионы bucket тусдаа байх ёстой.',r2_audio_not_configured:'R2_AUDIO_BUCKET тохиргоо алга. Хувийн аудио bucket-ийн нэрийг Netlify-д оруулна уу.',r2_list_unavailable:'R2 сангийн жагсаалт нээгдсэнгүй. API key, bucket нэр болон Object Read & Write эрхийг шалгана уу.',r2_upload_not_found:'Upload хийсэн файл R2 дээр баталгаажсангүй. Дахин оролдоно уу.',r2_upload_unavailable:'R2 upload холбоос үүссэнгүй. Серверийн тохиргоог шалгана уу.',invalid_media_file:'JPG, PNG, WEBP, AVIF зураг 25 MB хүртэл оруулна уу.'};
 export function mediaError(code){return r2Messages[code]||'R2 үйлчилгээ холбогдсонгүй. Нэвтрэлт болон Netlify/R2 тохиргоогоо шалгана уу.'}
 export async function prepareImages(file){

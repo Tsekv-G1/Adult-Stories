@@ -1,4 +1,4 @@
-import {memberRequest} from './customer-api.js?v=8.4.0';
+import {memberRequest} from './customer-api.js?v=8.8.0';
 // Local outbox belongs to one member. Failed writes survive reload; false saved values are tombstones.
 export function createLibrary({onChange=()=>{},onStatus=()=>{}}={}){
  let initialized=false,user=null,epoch=0,busy=false,timer=null,rows={},pending={};

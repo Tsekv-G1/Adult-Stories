@@ -45,4 +45,16 @@ async function list({cursor='',audio=false}={}){
  const objects=(result.Contents||[]).filter(o=>!/^cms-images\/[a-f\d-]{36}\.(jpg|png|webp|avif)\.(screen|thumb)\.webp$/.test(o.Key)&&validKey(o.Key)&&(audio?audioKey(o.Key):imageKey(o.Key)));
  return {items:objects.map(o=>audio?{key:o.Key,filename:o.Key.split('/').pop(),bytes:o.Size||0,reference:s.endpoint+'/'+bucket+'/'+encoded(o.Key)}:asset(o.Key,{bytes:o.Size||0})),next_cursor:result.IsTruncated?result.NextContinuationToken||null:null};
 }
-module.exports={settings,client,upload,complete,list,publicUrl,privatePath,signedAudio,validKey};
+async function audioOutputTargets(storyId){
+ const s=settings();if(!s.audio)c.fail(503,'r2_audio_not_configured');
+ if(!/^[a-f\d-]{36}$/i.test(storyId||''))c.fail(400,'invalid_id');
+ const nonce=crypto.randomUUID(),fullKey=`generated/${storyId}/${nonce}.mp3`,previewKey=`audio-preview/${storyId}/${nonce}.mp3`;
+ try{
+  const [fullPut,previewPut]=await Promise.all([
+   getSignedUrl(client(),new PutObjectCommand({Bucket:s.audio,Key:fullKey,ContentType:'audio/mpeg'}),{expiresIn:3600}),
+   getSignedUrl(client(),new PutObjectCommand({Bucket:s.bucket,Key:previewKey,ContentType:'audio/mpeg'}),{expiresIn:3600})
+  ]);
+  return {full_put_url:fullPut,full_reference:`${s.endpoint}/${encodeURIComponent(s.audio)}/${fullKey.split('/').map(encodeURIComponent).join('/')}`,preview_put_url:previewPut,preview_url:publicUrl(previewKey)};
+ }catch(e){if(e instanceof c.ApiError)throw e;c.fail(503,'r2_upload_unavailable')}
+}
+module.exports={settings,client,upload,complete,list,publicUrl,privatePath,signedAudio,audioOutputTargets,validKey};

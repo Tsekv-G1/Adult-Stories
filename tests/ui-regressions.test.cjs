@@ -26,7 +26,7 @@ test('story list can switch between readable list and cover card views', () => {
 
 test('mobile audio dock keeps an accessible stop control and compact layout', () => {
   assert.match(read('public/index.html'), /id="audioStop" aria-label="Тоглуулагч хаах"/);
-  assert.match(read('public/audio-player.js'), /\$\('#audioStop'\)\.addEventListener\('click',stop\)/);
+  assert.match(read('public/audio-player.js'), /\$\('#audioStop'\)\.addEventListener\('click',\(\)=>stop\(\)\)/);
   assert.match(read('public/public.css'), /grid-template-areas:"track extras" "controls controls" "timeline timeline"/);
   assert.match(read('public/public.css'), /\.public-site \.audio-close\{width:29px;min-width:29px;height:29px;min-height:29px/);
 });
@@ -60,7 +60,7 @@ test('story editor can choose and crop independent audio artwork and saves it wi
   assert.match(admin, /config\[audioArtDevice\]/);
   assert.match(app, /artAsset=asset\(design\.asset_id\)/);
   assert.match(player, /--audio-art-position/);
-  assert.match(player, /--audio-art-scale/);
+  assert.match(player, /--audio-art-zoom/);
   assert.match(player, /activeArtwork\[matchMedia\('\(max-width:520px\)'\)\.matches\?'mobile':'desktop'\]/);
   assert.match(read('public/style.css'), /\.audio-art-preview\[data-device=mobile\]\{grid-template-columns/);
 });
@@ -103,7 +103,7 @@ test('reader provides preview without access and full audio separately when acce
   const app = read('public/app.js');
   assert.match(html, /id="readerAudioPreview">▶ Сонсож үзэх/);
   assert.match(html, /id="readerAudioFull" hidden>▶ Бүтэн аудио/);
-  assert.match(app, /previewTarget=safeUrl\(s\.audio_preview_url\)/);
+  assert.match(app, /previewTarget=audioAvailable\(s\)/);
   assert.match(app, /fullTarget=access&&safeUrl\(body\.full_audio_url\)/);
   assert.match(app, /readerAudioTarget\?\.preview/);
   assert.match(app, /readerAudioTarget\?\.full/);
@@ -116,4 +116,21 @@ test('audio player opens an artwork led full screen view and supports M4A MIME t
   assert.doesNotMatch(player, /MP3 холбоос ашиглана уу/);
   assert.match(css, /\.audio-player\.is-expanded/);
   assert.match(read('server/r2.cjs'), /ResponseContentType:'audio\/mp4'/);
+});
+
+test('expanded player keeps one color artwork layer and browser back dismisses it', () => {
+  const player = read('public/audio-player.js');
+  const css = read('public/public.css');
+  assert.match(player, /adultAudioOverlay:true/);
+  assert.match(player, /addEventListener\('popstate'/);
+  assert.match(css, /background-size:cover,cover;background-repeat:no-repeat/);
+  assert.match(css, /\.audio-art img\{filter:none;opacity:1\}/);
+  assert.match(css, /\.audio-title:active\{color:#fff;text-decoration:none/);
+});
+
+test('private full audio cannot be presented as a public preview', () => {
+  const app = read('public/app.js');
+  const admin = read('public/admin.js');
+  assert.match(app, /!isPrivateAudio\(s\.audio_preview_url\)/);
+  assert.match(admin, /isPrivateAudio\(previewUrl\)\|\|previewUrl===fullUrl/);
 });

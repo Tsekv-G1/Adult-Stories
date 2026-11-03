@@ -36,7 +36,7 @@ test('audio artwork sits behind a subdued player and listen actions use soft pil
   const css = read('public/public.css');
   assert.match(css, /var\(--audio-art,none\)/);
   assert.match(css, /\.public-site \.story-actions \.plain-btn\.audio\{[^}]*border-radius:99px[^}]*background:linear-gradient\(110deg,#251b25e8,#211820e8\)/);
-  assert.match(css, /\.public-site #readerAudio\{border-radius:99px/);
+  assert.match(css, /\.public-site #readerAudioPreview,\.public-site #readerAudioFull\{border-radius:99px/);
 });
 
 test('story editor can choose and crop independent audio artwork and saves it with the story', () => {
@@ -83,6 +83,37 @@ test('editor supports transparent preset and custom read-count display values', 
   assert.match(html, /редакторын сонголт гэж ил тод тэмдэглэнэ/);
   assert.match(admin, /readsMode==='custom'\?customReads:readsMode/);
   assert.match(admin, /storyIndexReadsCustom/);
-  assert.match(app, /count===10000\?'10k\+':count===5000\?'5k\+':count===1000\?'1k\+'/);
-  assert.match(app, /Гараар тохируулсан тоо · бодит үзэлт биш/);
+  assert.doesNotMatch(app, /class="story-activity"|Гараар тохируулсан тоо · бодит үзэлт биш/);
+  assert.doesNotMatch(read('public/index.html'), /сүүлийн 30 хоногийн бодит уншилт/);
+});
+
+
+test('audio preview IN and OUT accept clock time and validate the selected range', async () => {
+  const {parseClockTime} = await import('../public/studio.js');
+  assert.equal(parseClockTime('6:30'), 390);
+  assert.equal(parseClockTime('1:02:03'), 3723);
+  assert.equal(parseClockTime('90'), 90);
+  assert.ok(Number.isNaN(parseClockTime('2:75')));
+  assert.match(read('public/admin.html'), /id="storyPreviewStart" type="text"/);
+  assert.ok(read('public/admin.js').includes("parseClockTime($('#storyPreviewStart').value)"));
+});
+
+test('reader provides preview without access and full audio separately when access is available', () => {
+  const html = read('public/index.html');
+  const app = read('public/app.js');
+  assert.match(html, /id="readerAudioPreview">▶ Сонсож үзэх/);
+  assert.match(html, /id="readerAudioFull" hidden>▶ Бүтэн аудио/);
+  assert.match(app, /previewTarget=safeUrl\(s\.audio_preview_url\)/);
+  assert.match(app, /fullTarget=access&&safeUrl\(body\.full_audio_url\)/);
+  assert.match(app, /readerAudioTarget\?\.preview/);
+  assert.match(app, /readerAudioTarget\?\.full/);
+});
+
+test('audio player opens an artwork led full screen view and supports M4A MIME type', () => {
+  const player = read('public/audio-player.js');
+  const css = read('public/public.css');
+  assert.match(player, /root\.classList\.add\('is-expanded'\)/);
+  assert.doesNotMatch(player, /MP3 холбоос ашиглана уу/);
+  assert.match(css, /\.audio-player\.is-expanded/);
+  assert.match(read('server/r2.cjs'), /ResponseContentType:'audio\/mp4'/);
 });

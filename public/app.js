@@ -4,7 +4,8 @@ import {memberRequest} from './customer-api.js?v=8.10.0';
 import {createCheckout} from './checkout.js?v=8.15.1';
 import {getData,getBody,CONFIG,online,esc,$,$$,overlayCSS,fmtPrice,textParas,subscribeChanges,defaults,safeUrl} from './core.js?v=8.8.0';
 import {visualFor,applyPhoto,durationLabel,audioSeconds} from './studio.js?v=8.8.0';
-import {createAudioPlayer} from './audio-player.js?v=8.19.0';
+import {createAudioPlayer} from './audio-player.js?v=8.20.0';
+import {isPrivateAudio} from './private-audio.js?v=8.19.0';
 import {createMemberAuth} from './member-auth.js?v=8.12.0';
 import {recordStoryActivity,loadStoryMetrics} from './story-activity.js?v=8.8.0';
 const studioMode=new URLSearchParams(location.search).get('studio')==='1'&&window.parent!==window;
@@ -15,7 +16,7 @@ const state={data:null,filter:'Бүгд',search:'',sort:'popular',shortOnly:fals
 let storyMetrics=new Map(),metricsRevision=0,readTimer=null;const trackedListen=new Set();
 const asset=id=>state.data?.assets.find(a=>a.id===id),story=id=>state.data?.stories.find(s=>s.id===id);
 const visible=()=>state.data.stories.filter(s=>s.status==='published'&&(!s.publish_at||new Date(s.publish_at)<=new Date())).sort((a,b)=>Number(a.sort_order??100)-Number(b.sort_order??100));
-const audioAvailable=s=>!!safeUrl(s?.audio_preview_url),durationText=s=>audioSeconds(s)?durationLabel(s):'';
+const audioAvailable=s=>!!safeUrl(s?.audio_preview_url)&&!isPrivateAudio(s.audio_preview_url),durationText=s=>audioSeconds(s)?durationLabel(s):'';
 let readerRequest=0,readerAudioTarget=null,reloading=null,lastModalFocus=null;
 let savedStorageKey='adult_v5_saved';
 let libraryReady=false,restoreReading=false,lastReadSave=0;
@@ -81,7 +82,7 @@ async function renderReader(){
  
  let access=!online&&(state.unlocked.includes(s.id)||state.member),body={},bodyReply={};if(access)try{body=await getBody(s.id)}catch(error){console.error('Story body unavailable',error)}if(online&&memberAuth.user&&!studioMode)try{body=(bodyReply=await memberRequest('body',null,{id:s.id})).body;access=true}catch(error){if(![401,403].includes(error.status))console.error('Private story could not load')}if(token!==readerRequest)return;if(!access&&player.snapshot().id===s.id&&player.snapshot().kind==='full')player.stop();
  $('#readerText').innerHTML=[...textParas(s.preview_text),...textParas(body.full_text)].map(p=>`<p>${esc(p)}</p>`).join('')||'<p>Энэ өгүүллэгийн эхлэл удахгүй нэмэгдэнэ.</p>';
- const previewTarget=safeUrl(s.audio_preview_url)?{url:s.audio_preview_url,kind:'preview'}:null,fullTarget=access&&safeUrl(body.full_audio_url)?{url:body.full_audio_url,kind:'full',expiresAt:bodyReply.audio_expires_at?Date.parse(bodyReply.audio_expires_at)-30000:Infinity,renew:async()=>{const result=await memberRequest('body',null,{id:s.id});if(!safeUrl(result.body.full_audio_url))throw Error('audio_unavailable');return{url:result.body.full_audio_url,expiresAt:result.audio_expires_at?Date.parse(result.audio_expires_at)-30000:Infinity}}}:null;
+ const previewTarget=audioAvailable(s)?{url:s.audio_preview_url,kind:'preview'}:null,fullTarget=access&&safeUrl(body.full_audio_url)?{url:body.full_audio_url,kind:'full',expiresAt:bodyReply.audio_expires_at?Date.parse(bodyReply.audio_expires_at)-30000:Infinity,renew:async()=>{const result=await memberRequest('body',null,{id:s.id});if(!safeUrl(result.body.full_audio_url))throw Error('audio_unavailable');return{url:result.body.full_audio_url,expiresAt:result.audio_expires_at?Date.parse(result.audio_expires_at)-30000:Infinity}}}:null;
  $('#readerAudioPreview').hidden=!previewTarget;$('#readerAudioPreview').dataset.audioId=s.id;$('#readerAudioPreview').dataset.kind='preview';$('#readerAudioFull').hidden=!fullTarget;$('#readerAudioFull').dataset.audioId=s.id;$('#readerAudioFull').dataset.kind='full';readerAudioTarget={preview:previewTarget,full:fullTarget};syncAudioButtons();
  $('#paywall').classList.toggle('hidden',access);updateReadingIndicator();if(restoreReading){restoreReading=false;const fraction=library.get(s.id)?.read_fraction||0;if(fraction>0)requestAnimationFrame(()=>{const text=$('#readerText'),top=text.getBoundingClientRect().top+scrollY;window.scrollTo({top:top+Math.max(0,text.offsetHeight-innerHeight*.6)*fraction-100,behavior:'instant'})})}$('#unlockStory').textContent=Number(s.price)<=0?'Үнэгүй үргэлжлүүлэх':`Эрх нээх · ${fmtPrice(s.price||9900)}`;$('#paywallNote').textContent='';
 }

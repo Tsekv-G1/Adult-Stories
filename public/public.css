@@ -188,6 +188,26 @@ html:has(.public-site){scroll-padding-top:105px}
 .public-site.reading-light .reader-font-tools button{color:#433541;background:#eee6ed;border-color:#ded1dc}
 .public-site.reading-light .reader-tools .btn.outline{color:#473541;border-color:#d7c8d4}
 @media(max-width:520px){.public-site .audio-controls{gap:2px}.public-site .audio-skip:not(.audio-next){width:34px;min-width:34px}.public-site .audio-next{width:30px;min-width:30px}.public-site .audio-extras{gap:2px}.public-site .audio-speed{width:auto;min-width:34px;padding-inline:6px;font-size:9px}.public-site .audio-close{width:31px;min-width:31px}.public-site .reader-font-tools #readerTheme{min-height:40px;padding-inline:9px}}
+/* Compact mobile dock keeps close and playback controls visible without covering the story. */
+@media(max-width:520px){
+ .public-site .audio-player{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto;gap:5px 8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-radius:13px 13px 0 0;}
+ .public-site .audio-track{grid-column:1;grid-row:1;min-height:38px;gap:7px}
+ .public-site .audio-art{width:34px;height:34px;flex:none}
+ .public-site .audio-title{font-size:11px;line-height:1.3}
+ .public-site .audio-track-text small{font-size:8px;margin-top:1px}
+ .public-site .audio-now{font-size:7px}
+ .public-site .audio-controls{grid-column:2;grid-row:1;gap:0;justify-content:flex-end}
+ .public-site .audio-skip,.public-site .audio-skip:not(.audio-next),.public-site .audio-next{width:29px;min-width:29px;height:34px;min-height:34px;font-size:21px}
+ .public-site .audio-skip small{top:14px;font-size:6px}
+ .public-site .audio-play{width:34px;height:34px;min-height:34px;font-size:13px}
+ .public-site .audio-extras{grid-column:1/-1;grid-row:2;justify-content:center;gap:5px}
+ .public-site .audio-speed{width:auto;min-width:39px;min-height:30px;padding:3px 7px;font-size:9px}
+ .public-site .audio-close{width:30px;min-width:30px;min-height:30px;height:30px;font-size:12px;border-color:#765060;color:#f5dce5}
+ .public-site .audio-timeline{grid-column:1/-1;grid-row:3;gap:7px}
+ .public-site .audio-timeline output{font-size:8px;min-width:25px}
+ .public-site .audio-timeline input{height:12px}
+ .public-site.has-audio{padding-bottom:126px}
+}
 @media(max-width:360px){.public-site .audio-sleep{font-size:7px;width:36px;min-width:36px;padding-inline:2px}.public-site .audio-autonext{font-size:0;width:34px;min-width:34px;padding-inline:4px}.public-site .audio-autonext:after{content:'AUTO';font-size:8px}}
 .public-site .membership-benefits{margin:16px 0 4px;padding:14px 18px 14px 36px;border:1px solid #ffffff12;border-radius:12px;color:#c9bcc8;line-height:1.9}.public-site .membership-plan small{display:block}.checkout-total span small{display:block;margin-top:6px;color:#b89caf;font-size:11px;line-height:1.5}.audio-segment-preview .field-row{align-items:end;gap:12px}.audio-segment-preview .field-row .field{flex:1;min-width:110px}
 

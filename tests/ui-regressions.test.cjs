@@ -98,15 +98,28 @@ test('audio preview IN and OUT accept clock time and validate the selected range
   assert.ok(read('public/admin.js').includes("parseClockTime($('#storyPreviewStart').value)"));
 });
 
-test('reader provides preview without access and full audio separately when access is available', () => {
+test('reader offers preview and a full-listen purchase path before access, then plays the protected audio', () => {
   const html = read('public/index.html');
   const app = read('public/app.js');
   assert.match(html, /id="readerAudioPreview">▶ Сонсож үзэх/);
-  assert.match(html, /id="readerAudioFull" hidden>▶ Бүтэн аудио/);
+  assert.match(html, /id="readerAudioFull" hidden>▶ Бүтэн сонсох/);
   assert.match(app, /previewTarget=audioAvailable\(s\)/);
   assert.match(app, /fullTarget=adultConfirmed\(\)&&access&&safeUrl\(body\.full_audio_url\)/);
+  assert.match(app, /readerAudioFull'\)\.hidden=!adultConfirmed\(\)\|\|!\(audioSeconds\(s\)\|\|fullTarget\)/);
   assert.match(app, /readerAudioTarget\?\.preview/);
-  assert.match(app, /readerAudioTarget\?\.full/);
+  assert.match(app, /if\(target\?\.full\)\{playAudio\(s,target\.full\);return\}/);
+  assert.match(app, /membershipOptions\(\)\}\);\$\('#readerSave'/);
+  assert.match(app, /if\(changed&&state\.reader\)renderReader\(\)/);
+});
+
+test('audio player has previous and next story controls alongside ten-second seek', () => {
+  const html = read('public/index.html');
+  const app = read('public/app.js');
+  assert.match(html, /id="audioPrevious" aria-label="Өмнөх аудио эхлэл"/);
+  assert.match(html, /id="audioNext" aria-label="Дараагийн аудио эхлэл"/);
+  assert.match(app, /function previousAudio\(\)/);
+  assert.match(app, /\$\('#audioPrevious'\)\.addEventListener\('click',playPreviousAudio\)/);
+  assert.match(app, /\$\('#audioPrevious'\)\.disabled=!previousAudio\(\)/);
 });
 
 test('audio player opens an artwork led full screen view and supports M4A MIME type', () => {

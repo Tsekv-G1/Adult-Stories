@@ -5,6 +5,9 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+[functions."editor-audio-crop-background"]
+  external_node_modules = ["ffmpeg-static"]
+  included_files = ["node_modules/ffmpeg-static/ffmpeg"]
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"

@@ -126,8 +126,8 @@ Supabase SQL Editor дээр эхлээд одоогийн `schema.sql`, `002_ba
 
 Supabase SQL Editor дээр `supabase/012_audio_crop_jobs.sql`-г нэг удаа ажиллуулна. Энэ migration нь `stories` хүснэгттэй байхыг л шаарддаг; хамгийн сүүлд хэрэглэсэн migration-ы дараа ажиллуулж болно. Төлбөр, эрх, хэрэглэгчийн хүснэгтэд өөрчлөлт оруулахгүй.
 
-Netlify Adult Stories site environment дээр дараах нууц тохиргоо шаардлагатай. `AUDIO_PROCESSOR_URL` болон `AUDIO_PROCESSOR_TOKEN` өмнөх FFmpeg worker-д аль хэдийн тавигдсан бол хэвээр ашиглана. `EDITOR_AUDIO_JOB_SECRET`-д шинэ, урт random утга үүсгээд нууц environment variable байдлаар нэмнэ. Эдгээрийг бүх production deploy context-д тохируулж Netlify-г дахин deploy хийнэ. Admin browser руу эдгээр түлхүүрийг гаргахгүй.
+Preview тайрах FFmpeg нь одоо Netlify background function-д багцлагдана. Тусдаа Hugging Face Space, `AUDIO_PROCESSOR_URL`, `AUDIO_PROCESSOR_TOKEN`, `EDITOR_AUDIO_JOB_SECRET` шаардлагагүй. Netlify build нь root `package.json`-ийн `ffmpeg-static`-ийг Linux дээр суулгаж, зөвхөн энэ function-д binary-г оруулна. Одоо байгаа `SUPABASE_SERVICE_ROLE_KEY`, R2 түлхүүр/bucket болон `APP_ORIGIN` серверийн environment-д хүчинтэй байх ёстой. Нууц түлхүүр browser руу гарахгүй.
 
-FFmpeg worker ажиллаж буй private Hugging Face Space дээр энэ repository-ийн `audio-worker` хавтсыг бүтнээр deploy хийнэ. Шинэ `/trim` endpoint орсон тул зөвхөн Netlify deploy хийх хангалтгүй. Preview crop шалгалтад worker-ийн `AUDIO_PROCESSOR_TOKEN` Netlify утгатай яг ижил байх шаардлагатай.
+`012_audio_crop_jobs.sql` migration аль хэдийн хийгдсэн санд дахин ажиллуулахгүй. Бүтэн аудио болон өгүүллэгээ хадгалсны дараа IN/OUT сонгоод батална. 5–180 секундын MP3 файл нийтийн R2 bucket-д үүсэж, бэлэн болсон URL өгүүллэгт хадгалагдана. Editor-ийн тусдаа preview URL талбарт өөрийн бэлэн файлын холбоосыг гараар оруулах сонголт хэвээр.
 
 Өгүүллэгийн жагсаалтын editor → `Жагсаалтын тохиргоо` хэсэгт уншилт/сонсолтын харагдах тоог өгч болно. Талбарыг хоосон үлдээвэл бодит сүүлийн 30 хоногийн тоог харуулна. Эдгээр утга зөвхөн карт дээр харуулах тоо; алдартай эрэмбэ бодит аналитик тоогоор хэвээр эрэмбэлнэ.

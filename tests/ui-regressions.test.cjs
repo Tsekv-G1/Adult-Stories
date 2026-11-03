@@ -104,7 +104,7 @@ test('reader provides preview without access and full audio separately when acce
   assert.match(html, /id="readerAudioPreview">▶ Сонсож үзэх/);
   assert.match(html, /id="readerAudioFull" hidden>▶ Бүтэн аудио/);
   assert.match(app, /previewTarget=audioAvailable\(s\)/);
-  assert.match(app, /fullTarget=access&&safeUrl\(body\.full_audio_url\)/);
+  assert.match(app, /fullTarget=adultConfirmed\(\)&&access&&safeUrl\(body\.full_audio_url\)/);
   assert.match(app, /readerAudioTarget\?\.preview/);
   assert.match(app, /readerAudioTarget\?\.full/);
 });
@@ -118,19 +118,23 @@ test('audio player opens an artwork led full screen view and supports M4A MIME t
   assert.match(read('server/r2.cjs'), /ResponseContentType:'audio\/mp4'/);
 });
 
-test('expanded player keeps one color artwork layer and browser back dismisses it', () => {
+test('expanded player keeps one monochrome artwork layer and browser back dismisses it', () => {
   const player = read('public/audio-player.js');
   const css = read('public/public.css');
   assert.match(player, /adultAudioOverlay:true/);
   assert.match(player, /addEventListener\('popstate'/);
   assert.match(css, /background-size:cover,cover;background-repeat:no-repeat/);
-  assert.match(css, /\.audio-art img\{filter:none;opacity:1\}/);
+  assert.match(css, /\.audio-player\.is-expanded::before\{inset:-2px[^}]*filter:grayscale\(1\)/);
+  assert.match(css, /\.audio-art img\{filter:grayscale\(1\);opacity:1\}/);
   assert.match(css, /\.audio-title:active\{color:#fff;text-decoration:none/);
 });
 
 test('private full audio cannot be presented as a public preview', () => {
   const app = read('public/app.js');
   const admin = read('public/admin.js');
+  const editor = read('public/admin.html');
   assert.match(app, /!isPrivateAudio\(s\.audio_preview_url\)/);
   assert.match(admin, /isPrivateAudio\(previewUrl\)\|\|previewUrl===fullUrl/);
+  assert.match(editor, /id="storyAudioPreview" type="url"/);
+  assert.doesNotMatch(editor, /id="storyAudioPreview"[^>]*readonly/);
 });

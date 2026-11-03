@@ -29,11 +29,11 @@ exports.handler=c.endpoint(['POST'],async e=>{
   if(!row||row.full_audio_url!==reference)c.fail(409,'save_audio_first');
   const source=await require('../../server/audio.cjs').resolve(reference);if(!source)c.fail(400,'invalid_audio_source');
   const r2=require('../../server/r2.cjs'),target=await r2.audioPreviewTarget(storyId);
-  const processor=process.env.AUDIO_PROCESSOR_URL||'';let processorUrl;try{processorUrl=new URL(processor)}catch{c.fail(503,'audio_processor_unavailable')}
-  if(processorUrl.protocol!=='https:'||!process.env.AUDIO_PROCESSOR_TOKEN||!process.env.EDITOR_AUDIO_JOB_SECRET)c.fail(503,'audio_processor_unavailable');
   const created=await c.db('adult_audio_crop_jobs',{method:'POST',data:{story_id:storyId,status:'queued',start_seconds:start,end_seconds:end,preview_url:target.url,error_code:''},prefer:'return=representation'}),job=created?.[0];
   if(!job?.id)c.fail(503,'audio_crop_start_failed');
-  let started;try{started=await fetch(c.origin()+'/.netlify/functions/editor-audio-crop-background',{method:'POST',headers:{'Content-Type':'application/json','X-Editor-Audio-Secret':c.config('EDITOR_AUDIO_JOB_SECRET')},body:JSON.stringify({job_id:job.id,source_url:source,put_url:target.put_url,start_seconds:start,end_seconds:end}),signal:AbortSignal.timeout(12000)})}catch{started=null}
+  const payload=JSON.stringify({job_id:job.id,source_url:source,put_url:target.put_url,start_seconds:start,end_seconds:end});
+  const signature=require('node:crypto').createHmac('sha256',c.config('SUPABASE_SERVICE_ROLE_KEY')).update(payload).digest('hex');
+  let started;try{started=await fetch(c.origin()+'/.netlify/functions/editor-audio-crop-background',{method:'POST',headers:{'Content-Type':'application/json','X-Editor-Audio-Signature':signature},body:payload,signal:AbortSignal.timeout(12000)})}catch{started=null}
   if(!started||!(started.ok||started.status===202)){await c.db('adult_audio_crop_jobs?id=eq.'+job.id,{method:'PATCH',data:{status:'failed',error_code:'audio_crop_start_failed',updated_at:new Date().toISOString()},prefer:'return=minimal'});c.fail(503,'audio_crop_start_failed')}
   return c.reply(200,{ok:true,job:{id:job.id,status:'queued',story_id:storyId}})
  }

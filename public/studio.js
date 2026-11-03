@@ -18,6 +18,7 @@ export function applyPhoto(image,e){
 export const audioSeconds=s=>Math.max(0,Number(s?.overlay?.audio_seconds)||0);
 export const durationLabel=s=>audioSeconds(s)?`${Math.ceil(audioSeconds(s)/60)} МИН`:'ТЕКСТ';
 export function clockDuration(seconds){const n=Math.round(seconds||0);return n>=3600?`${Math.floor(n/3600)}:${String(Math.floor(n%3600/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`:`${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`}
+export function parseClockTime(value){const raw=String(value??'').trim();if(!raw)return NaN;if(/^\d+(?:\.\d+)?$/.test(raw))return Number(raw);const parts=raw.split(':');if(parts.length<2||parts.length>3||parts.some(part=>!/^\d+(?:\.\d+)?$/.test(part)))return NaN;const nums=parts.map(Number);if(nums.slice(1).some(part=>part>=60))return NaN;return nums.length===2?nums[0]*60+nums[1]:nums[0]*3600+nums[1]*60+nums[2]}
 export function automaticSlug(title,stories=[],current=null){
  if(current?.slug)return current.slug;
  const base=String(title||'').trim().toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яөүё\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,78)||'story';

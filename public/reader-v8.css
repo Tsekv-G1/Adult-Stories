@@ -45,3 +45,12 @@
 .public-site .series-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.public-site .series-heading h2{margin:4px 0 0;font-size:21px}.public-site .story-series>p{margin:10px 0 15px;color:#b8aab4}
 .public-site .story-series-list{display:grid;gap:7px}.public-site .series-story{display:flex;align-items:center;gap:12px;width:100%;min-height:48px;padding:8px 12px;text-align:left;border:1px solid #ffffff10;border-radius:10px;background:#ffffff04;color:#e8dfe5}.public-site .series-story:hover{border-color:#f0699166;background:#f0699110}.public-site .series-story.is-current{border-color:#ef668e66;background:#ef668e13}.public-site .series-order{display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border-radius:50%;background:#ffffff0b;color:#f096ae;font-size:12px}.public-site .series-story>b{margin-left:auto;color:#f096ae;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
 @media(max-width:690px){.public-site .membership-expiry-notice{justify-content:flex-start;flex-wrap:wrap;padding:12px 52px 12px 16px;gap:9px;font-size:12px}.public-site .membership-expiry-notice .btn{min-height:40px}.public-site .expiry-dismiss{right:12px}.public-site .story-series{padding:17px;margin:25px 16px}.public-site .series-heading h2{font-size:18px}}
+
+/* Keep listening and its access-only full duration together beneath each card. */
+.public-site .story-card>p{margin-bottom:9px}
+.public-site .story-actions{align-items:center;column-gap:8px;row-gap:5px}
+.public-site .story-actions .save-action{margin-bottom:0}
+.public-site .story-listen{display:flex;grid-column:1/-1;width:100%;flex-direction:column;align-items:flex-start;gap:5px;padding-top:2px}
+.public-site .story-actions .story-listen .plain-btn.audio{max-width:100%;min-height:40px;padding:0 15px;text-align:center;white-space:normal}
+.public-site .story-duration{padding-left:4px;color:#caa0b0;font-size:11px;line-height:1.35}
+@media(max-width:690px){.public-site .story-card>p{margin-bottom:7px}.public-site .story-actions{row-gap:4px}.public-site .story-listen{gap:4px;padding-top:0}.public-site .story-actions .story-listen .plain-btn.audio{width:100%;padding-inline:8px;font-size:11px}.public-site .story-duration{font-size:10px}}

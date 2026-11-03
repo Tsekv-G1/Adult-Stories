@@ -22,7 +22,7 @@ function client(){const s=settings();return new S3Client({region:'auto',endpoint
 const encoded=k=>k.split('/').map(encodeURIComponent).join('/');
 function publicUrl(key){if(!validKey(key))c.fail(400,'invalid_media_key');return settings().publicBase+'/'+encoded(key)}
 function privatePath(raw){if(!process.env.R2_AUDIO_BUCKET)return null;try{const s=settings(),u=new URL(raw);if(u.origin!==s.endpoint||u.search||u.hash||u.username||u.password)return null;const prefix='/'+s.audio+'/';if(!u.pathname.startsWith(prefix))return null;const key=decodeURIComponent(u.pathname.slice(prefix.length));return validKey(key)&&audioKey(key)?key:null}catch{return null}}
-async function signedAudio(raw){const key=privatePath(raw);if(!key)return '';try{return await getSignedUrl(client(),new GetObjectCommand({Bucket:settings().audio,Key:key}),{expiresIn:900})}catch{c.fail(503,'r2_audio_unavailable')}}
+async function signedAudio(raw){const key=privatePath(raw);if(!key)return '';try{return await getSignedUrl(client(),new GetObjectCommand({Bucket:settings().audio,Key:key,...(/\.m4a$/i.test(key)?{ResponseContentType:'audio/mp4'}:{})}),{expiresIn:900})}catch{c.fail(503,'r2_audio_unavailable')}}
 async function upload(body){
  const type=String(body.type||''),size=Number(body.size);if(!IMAGE_TYPES[type]||!Number.isSafeInteger(size)||size<1||size>25*1024*1024)c.fail(400,'invalid_media_file');
  const key='cms-images/'+crypto.randomUUID()+'.'+IMAGE_TYPES[type];

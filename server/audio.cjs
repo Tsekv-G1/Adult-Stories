@@ -7,4 +7,10 @@ function path(raw){return legacyPath(raw)||require('./r2.cjs').privatePath(raw)}
 async function sign(raw){if(require('./r2.cjs').privatePath(raw))return require('./r2.cjs').signedAudio(raw);const p=legacyPath(raw);if(!p)return '';const result=await storage('object/sign/adult-audio/'+p,{expiresIn:900});const signed=result.signedURL||result.signedUrl;if(typeof signed!=='string')c.fail(503,'audio_storage_unavailable');const url=new URL(signed.startsWith('/storage/v1/')?signed:'/storage/v1'+signed,c.config('SUPABASE_URL'));if(url.origin!==new URL(c.config('SUPABASE_URL')).origin)c.fail(503,'audio_storage_unavailable');return url.href}
 async function upload(extension){if(!['mp3','m4a','wav','ogg','webm','flac'].includes(extension))c.fail(400,'invalid_audio');const p=require('node:crypto').randomUUID()+'.'+extension,result=await storage('object/upload/sign/adult-audio/'+p,{});const token=result.token||new URL(result.url||result.signedURL,c.config('SUPABASE_URL')).searchParams.get('token');if(!token)c.fail(503,'audio_storage_unavailable');return{path:p,token,reference:c.config('SUPABASE_URL')+'/storage/v1/object/authenticated/adult-audio/'+p}}
 async function resolve(raw){if(path(raw))return sign(raw);try{const u=new URL(raw);if(u.username||u.password||u.hostname.endsWith('.r2.cloudflarestorage.com'))return '';if(u.protocol==='https:')return u.href;if(u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)&&u.origin===new URL(c.config('APP_ORIGIN')).origin)return u.href}catch{}return ''}
-module.exports={path,sign,upload,resolve};
+// Fail closed for paid stories: no paid MP3 may be delivered via a public URL.
+// Historical public URLs must be moved into a non-public R2 audio bucket.
+async function resolveForStory(raw,{paid=false}={}){
+ if(paid&&!path(raw))return {url:'',migrationRequired:Boolean(raw)};
+ return {url:await resolve(raw),migrationRequired:false};
+}
+module.exports={path,sign,upload,resolve,resolveForStory};

@@ -280,3 +280,19 @@ html:has(.public-site){scroll-padding-top:105px}
 .public-site .audio-player.is-expanded .audio-extras{width:100%;justify-content:flex-start}
 .public-site .audio-player.is-expanded #audioExpand{margin-left:auto}
 @media(max-width:520px){.public-site .audio-player.is-expanded{padding-bottom:max(56px,calc(env(safe-area-inset-bottom) + 32px));gap:14px}.public-site .audio-player.is-expanded .audio-extras{justify-content:flex-start}.public-site .audio-player.is-expanded .audio-track{margin-bottom:0}.public-site .audio-player.is-expanded .audio-controls{padding:4px 0}}
+
+/* Preview audio end → membership purchase, displayed above the fullscreen audio experience. */
+.public-site #modal{z-index:1200}
+.public-site .preview-unlock-title{font-weight:750;font-size:16px;line-height:1.4;margin:0 0 9px;color:#f8ecf2}
+.public-site .preview-checkout-note{border:1px solid #6b3550;border-radius:10px;background:#251521;padding:12px 14px;color:#e7c9d5;font-size:12px;line-height:1.6}
+@media(max-width:520px){.public-site .membership-plans{grid-template-columns:1fr}.public-site .membership-plan{min-height:0}}
+
+/* Keep age confirmation visible even when a checkout dialog is present. */
+.public-site #ageScreen{z-index:2000}
+.public-site .membership-plan [data-membership-price]{display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:100%}
+
+/* v4: payment transfer reference and clearer copy affordance */
+.bank-details .bank-memo{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:14px;border:1px solid rgba(245,77,120,.45);border-radius:12px;background:rgba(212,20,74,.07)}
+.bank-memo>span{font-size:.75rem;letter-spacing:.05em;font-weight:800;color:#ff789a}
+.bank-memo .bank-copy{font-size:1.1rem;max-width:100%;word-break:break-word}
+.checkout-memo-note{font-size:.88rem;line-height:1.6;color:var(--muted,#c8bfc6);margin:10px 0 14px}

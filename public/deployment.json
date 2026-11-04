@@ -1,0 +1,7 @@
+{
+  "version": "4.9.0",
+  "entries": {
+    "app": "dist/app-NCS5SHQW.js",
+    "admin": "dist/admin-GTY5KUMA.js"
+  }
+}

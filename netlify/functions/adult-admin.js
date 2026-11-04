@@ -15,12 +15,12 @@ exports.handler=c.endpoint(['POST'],async e=>{
   await c.rpc('adult_reset_password',{p_member:id,p_hash:digest,p_actor:actor,p_note:note});
   return c.reply(200,{ok:true,phone:member.phone,new_password:password});
  }
- if(['media-config','media-upload','media-complete','media-list','audio-list','preview-list'].includes(b.action)){
+ if(['media-config','media-upload','media-complete','media-list','audio-list','preview-list','cta-list'].includes(b.action)){
   const r2=require('../../server/r2.cjs');
   if(b.action==='media-config'){const s=r2.settings();return c.reply(200,{ok:true,provider:'r2',bucket:s.bucket,public_base:s.publicBase,audio_bucket:s.audio||null})}
   if(b.action==='media-upload')return c.reply(200,{ok:true,...await r2.upload(b)});
   if(b.action==='media-complete')return c.reply(200,{ok:true,asset:await r2.complete(b)});
-  return c.reply(200,{ok:true,...await r2.list({cursor:b.cursor||'',audio:b.action==='audio-list',publicAudio:b.action==='preview-list'})});
+  return c.reply(200,{ok:true,...await r2.list({cursor:b.cursor||'',audio:b.action==='audio-list',publicAudio:b.action==='preview-list'||b.action==='cta-list',publicKind:b.action==='cta-list'?'cta':''})});
  }
  if(b.action==='audio-crop-start'){
   const storyId=c.uuid(b.story_id),reference=String(b.reference||''),start=Number(b.start_seconds),end=Number(b.end_seconds);

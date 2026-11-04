@@ -25,42 +25,58 @@ export function mountR2({reload,toast,editorToken,onAudio}){
  $('#importR2Media').addEventListener('click',async()=>{if(importing)return;importing=true;const button=$('#importR2Media');button.disabled=true;
   try{const page=await importR2Page(cursor);cursor=page.cursor||'';await reload();button.textContent=cursor?'R2 · дараагийн 100 файл':'R2 САНГААС ЗУРАГ НЭМЭХ';toast(`${page.added} шинэ зураг санд нэмлээ. ${page.count-page.added} зураг өмнө нь байсан.`)}catch(error){toast(error.message,true)}finally{button.disabled=false;importing=false}
  });
- const dialog=$('#r2AudioDialog'),list=$('#r2AudioList');
- const more=$('#r2AudioMore'),status=$('#r2AudioStatus');
+ const dialog=$('#r2AudioDialog'),list=$('#r2AudioList'),search=$('#r2AudioSearch');
+ const more=$('#r2AudioMore'),status=$('#r2AudioStatus'),counter=$('#r2AudioCount');
+ let audioItems=[],loading=false;
+ function filterAudio(){
+  const q=search.value.trim().toLocaleLowerCase();let visible=0;
+  for(const button of list.children){const show=button.dataset.search.includes(q);button.hidden=!show;if(show)visible++}
+  counter.textContent=audioItems.length+' файл'+(q?' · '+visible+' таарсан':'');
+  if(!loading)status.textContent=visible?'Файлын нэр дээр дарж сонгоно уу.':q?'Ийм нэртэй аудио олдсонгүй.':audioCursor?'Дараагийн файлуудыг уншина уу.':'Энэ санд сонгох аудио алга.';
+ }
+ search.addEventListener('input',filterAudio);
  async function loadAudio(){
-  const version=++requestVersion;
-  const {kind,token}=audioTarget;
-  more.disabled=true;
-  status.textContent='Аудионы санг уншиж байна…';
+  if(loading||!audioTarget)return;
+  const version=requestVersion,{kind,token}=audioTarget;loading=true;more.disabled=true;status.textContent='Аудионы санг уншиж байна…';
   try{
-   const page=await mediaRequest({action:kind==='full'?'audio-list':'preview-list',cursor:audioCursor});
-   if(version!==requestVersion||!dialog.open)return;
-   for(const item of page.items){
-    if(kind==='cta'&&!/\.mp3$/i.test(item.key))continue;
-    const button=document.createElement('button');
-    button.type='button';button.className='btn secondary r2-audio-item';
-    button.textContent=(item.key||item.filename)+' · '+(item.bytes/1024/1024).toFixed(1)+' MB';
-    button.addEventListener('click',()=>{
-     if(editorToken()===token)onAudio(item.reference,kind);
-     else toast('Өгүүллэг солигдсон байна. Аудиогоо дахин сонгоно уу.',true);
-     dialog.close();
-    });
-    list.append(button);
-   }
-   audioCursor=page.next_cursor||'';more.hidden=!audioCursor;
-   status.textContent=list.children.length?'Файлаа сонгоно уу.':audioCursor?'Энэ хуудсанд тохирох аудио алга. Дараагийн хуудсыг үзнэ үү.':kind==='full'?'Хувийн R2 санд аудио алга.':'Нийтийн R2 media санд тохирох аудио алга. Аудио файлаа тэр санд нэмнэ үү.';
+   let pages=0;
+   do{
+    const page=await mediaRequest({action:kind==='full'?'audio-list':kind==='cta'?'cta-list':'preview-list',cursor:audioCursor});
+    if(version!==requestVersion||!dialog.open)return;
+    for(const item of page.items||[]){
+     if(kind==='cta'&&!/\.mp3$/i.test(item.key))continue;
+     const button=document.createElement('button'),name=item.filename||item.key?.split('/').pop()||'Аудио';
+     button.type='button';button.className='r2-audio-item';button.dataset.search=(name+' '+item.key).toLocaleLowerCase();
+     button.innerHTML='<span class="r2-audio-name"></span><small></small>';
+     button.querySelector('span').textContent=name;
+     button.querySelector('small').textContent=((item.bytes||0)/1024/1024).toFixed(1)+' MB';
+     button.title=item.key||name;
+     button.addEventListener('click',()=>{
+      if(editorToken()===token)onAudio(item.reference,kind);
+      else toast('Өгүүллэг солигдсон байна. Аудиогоо дахин сонгоно уу.',true);
+      dialog.close();
+     });
+     audioItems.push(item);list.append(button);
+    }
+    audioCursor=page.next_cursor||'';pages++;filterAudio();
+    if(audioCursor)status.textContent=audioItems.length+' файл уншлаа…';
+   }while(audioCursor&&pages<50);
+   more.hidden=!audioCursor;more.textContent='Үлдсэн файлыг ачаалах';filterAudio();
+   if(!audioItems.length&&!audioCursor)status.textContent=kind==='full'?'Хувийн R2 аудио санд бүтэн аудио алга.':kind==='cta'?'Нийтийн санд CTA MP3 алга. Preview файлуудыг энд харуулахгүй.':'Нийтийн санд preview аудио алга.';
   }catch(error){
    if(version!==requestVersion||!dialog.open)return;
    status.textContent=error.message;more.hidden=false;more.textContent='Дахин оролдох';
-  }finally{if(version===requestVersion)more.disabled=false}
+  }finally{if(version===requestVersion){loading=false;more.disabled=false}}
  }
  function open(kind){
-  audioTarget={kind,token:editorToken()};audioCursor='';list.replaceChildren();
-  $('#r2AudioTitle').textContent=kind==='full'?'R2 · Хувийн бүтэн аудио':kind==='cta'?'R2 · Нийтийн CTA MP3':'R2 · Нийтийн preview аудио';
-  more.hidden=true;more.textContent='Цааш унших';dialog.showModal();loadAudio();
+  requestVersion++;loading=false;audioTarget={kind,token:editorToken()};audioCursor='';audioItems=[];list.replaceChildren();search.value='';counter.textContent='';
+  $('#r2AudioTitle').textContent=kind==='full'?'Бүтэн аудио · хувийн сан':kind==='cta'?'CTA · нийтийн аудио':'Preview · нийтийн сан';
+  $('#r2AudioHelp').textContent=kind==='full'?'Энд хувийн R2 сангийн бүх бүтэн аудио харагдана.':kind==='cta'?'Зөвхөн нийтийн MP3. Тайрсан preview файлуудыг хассан.':'Нийтийн сангийн preview аудио.';
+  more.hidden=true;dialog.showModal();loadAudio();search.focus();
  }
  $('#chooseR2Audio').addEventListener('click',()=>open('full'));
  for(const button of document.querySelectorAll('[data-r2-kind]'))button.onclick=()=>open(button.dataset.r2Kind);
  $('#r2AudioClose').onclick=()=>dialog.close();
- more.onclick=()=>{more.textContent='Цааш унших';loadAudio()};
+ dialog.addEventListener('close',()=>{requestVersion++;loading=false;audioTarget=null});
+ more.onclick=loadAudio;
 }

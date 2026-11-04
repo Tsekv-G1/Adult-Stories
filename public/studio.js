@@ -9,7 +9,7 @@ export function cropFor(overlay={},mobile=false){
  const v={x:50,y:50,zoom:1,fit:'cover',...overlay,...(mobile?overlay.mobile:{})};
  return {x:limit(v.x,0,100,50),y:limit(v.y,0,100,50),zoom:limit(v.zoom,1,3,1),fit:v.fit==='contain'?'contain':'cover'};
 }
-export function visualFor(site={},overlay={},mobile=false){return {...visualDefault(),...site.visual_theme,...cropFor(overlay,mobile)}}
+export function visualFor(site={},overlay={},mobile=false){return {...visualDefault(),...site.visual_theme,...cropFor(overlay,mobile),grayscale:true,tint:'#919198'}}
 export function applyPhoto(image,e){
  image.style.objectFit=e.fit;image.style.objectPosition=`${e.x}% ${e.y}%`;
  image.style.transform=`scale(${e.zoom})`;image.style.transformOrigin=`${e.x}% ${e.y}%`;

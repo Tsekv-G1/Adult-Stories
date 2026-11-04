@@ -35,3 +35,17 @@ test('preview picker lists only public audio and keeps the private library separ
  const full=await r2.list({audio:true});assert.equal(calls[1].Bucket,'private-audio');
  assert.ok(full.items[0].reference.startsWith(names.R2_ENDPOINT+'/private-audio/'));
 });
+
+test('CTA picker excludes generated previews while full picker retains private originals',async t=>{
+ const sdk=require('@aws-sdk/client-s3');
+ const names={R2_ACCOUNT_ID:'a'.repeat(32),R2_MEDIA_BUCKET:'public-media',R2_AUDIO_BUCKET:'private-audio',R2_PUBLIC_BASE_URL:'https://media.example.com',R2_ACCESS_KEY_ID:'test',R2_SECRET_ACCESS_KEY:'test'};
+ const before=Object.fromEntries(Object.keys(names).map(key=>[key,process.env[key]]));Object.assign(process.env,names);
+ t.after(()=>{for(const [key,value] of Object.entries(before)){if(value===undefined)delete process.env[key];else process.env[key]=value}});
+ t.mock.method(sdk.S3Client.prototype,'send',async command=>({Contents:command.input.Bucket==='private-audio'?[{Key:'Зүүд.m4a',Size:4000000},{Key:'generated/full.mp3',Size:9000000}]:[{Key:'audio-preview/story/clip.mp3',Size:500000},{Key:'CTA.mp3',Size:900000},{Key:'Зураг.jpg',Size:1000}]}));
+ const cta=await r2.list({publicAudio:true,publicKind:'cta'});
+ assert.deepEqual(cta.items.map(item=>item.filename),['CTA.mp3']);
+ assert.equal(cta.items[0].reference,'https://media.example.com/CTA.mp3');
+ const full=await r2.list({audio:true});
+ assert.deepEqual(full.items.map(item=>item.filename),['Зүүд.m4a','full.mp3']);
+ assert.ok(full.items.every(item=>item.reference.includes('/private-audio/')));
+});

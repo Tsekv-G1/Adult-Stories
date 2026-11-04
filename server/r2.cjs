@@ -38,12 +38,12 @@ async function complete(body){
  const value=asset(key,{filename:String(body.filename||'').replace(/[\x00-\x1f\x7f]/g,'').slice(0,240)||undefined,bytes:object.ContentLength,width:dimension(body.width),height:dimension(body.height)});
  if(body.optimized===true){try{const screen=await client().send(new HeadObjectCommand({Bucket:settings().bucket,Key:key+'.screen.webp'})),thumb=await client().send(new HeadObjectCommand({Bucket:settings().bucket,Key:key+'.thumb.webp'}));if(screen.ContentType==='image/webp'&&thumb.ContentType==='image/webp')value.url=publicUrl(key+'.screen.webp')}catch{}}return value;
 }
-async function list({cursor='',audio=false}={}){
+async function list({cursor='',audio=false,publicAudio=false}={}){
  const s=settings(),bucket=audio?s.audio:s.bucket;if(!bucket)c.fail(503,'r2_audio_not_configured');
  if(typeof cursor!=='string'||cursor.length>4096)c.fail(400,'invalid_cursor');
  let result;try{result=await client().send(new ListObjectsV2Command({Bucket:bucket,MaxKeys:100,...(cursor?{ContinuationToken:cursor}:{})}))}catch{c.fail(503,'r2_list_unavailable')}
- const objects=(result.Contents||[]).filter(o=>!/^cms-images\/[a-f\d-]{36}\.(jpg|png|webp|avif)\.(screen|thumb)\.webp$/.test(o.Key)&&validKey(o.Key)&&(audio?audioKey(o.Key):imageKey(o.Key)));
- return {items:objects.map(o=>audio?{key:o.Key,filename:o.Key.split('/').pop(),bytes:o.Size||0,reference:s.endpoint+'/'+bucket+'/'+encoded(o.Key)}:asset(o.Key,{bytes:o.Size||0})),next_cursor:result.IsTruncated?result.NextContinuationToken||null:null};
+ const objects=(result.Contents||[]).filter(o=>!/^cms-images\/[a-f\d-]{36}\.(jpg|png|webp|avif)\.(screen|thumb)\.webp$/.test(o.Key)&&validKey(o.Key)&&(audio||publicAudio?audioKey(o.Key):imageKey(o.Key)));
+ return {items:objects.map(o=>audio||publicAudio?{key:o.Key,filename:o.Key.split('/').pop(),bytes:o.Size||0,reference:publicAudio?publicUrl(o.Key):s.endpoint+'/'+bucket+'/'+encoded(o.Key)}:asset(o.Key,{bytes:o.Size||0})),next_cursor:result.IsTruncated?result.NextContinuationToken||null:null};
 }
 async function audioOutputTargets(storyId){
  const s=settings();

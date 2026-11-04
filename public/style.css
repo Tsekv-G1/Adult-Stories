@@ -65,3 +65,38 @@ button:disabled{cursor:wait;opacity:.5}.story-sidebar{margin:0;padding:12px;disp
 .audio-art-preview-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center;pointer-events:none;z-index:0}
 .audio-art-preview:before{z-index:1;pointer-events:none}
 .audio-art-preview-copy,.audio-art-preview-controls,.audio-art-preview-extras,.audio-art-preview-line{z-index:2}
+
+/* The editor sidebar can be narrower than a phone even on a desktop. */
+.story-sidebar .content-list.cards-view{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));align-items:stretch}
+.content-list.cards-view .story-row{flex-direction:column;min-height:0}
+.content-list.cards-view .list-button{flex-direction:column;align-items:stretch;justify-content:flex-start}
+.content-list.cards-view .story-list-cover{width:100%;height:auto;aspect-ratio:16/10;object-fit:cover}
+.content-list.cards-view .story-list-copy strong{font-size:14px;overflow-wrap:break-word}
+.content-list.cards-view .story-list-copy small{font-size:12px}
+.content-list.cards-view .story-order-buttons{flex-direction:row;justify-content:flex-end;border-top:1px solid #302b35}
+.content-list.cards-view .story-order-buttons button{min-width:36px;min-height:32px}
+.audio-select-actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.audio-select-actions [hidden]{display:none}
+#shared-preview,#shared-cta{overflow-wrap:anywhere}
+.editor-list-summary,.writing-tools,.writing-header,.writing-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.editor-list-summary,.writing-tools,.writing-footer{color:#bcb1c0;font-size:12px}
+.editor-issue{margin:10px 0;padding:12px;color:#ffe0e5;background:#361b27;border:1px solid #8c475b;border-radius:9px}
+.story-editor [aria-invalid="true"]{outline:2px solid #ff7398;outline-offset:2px}
+#writingDialog{width:min(760px,calc(100vw - 24px));max-height:94dvh;padding:clamp(14px,3vw,28px);color:#f4edf4;background:#151218;border:1px solid #514351;border-radius:16px}
+#writingDialog::backdrop{background:#08070bcf}
+#writingDialog h2{margin:4px 0;font-size:clamp(19px,4vw,28px)}
+#writingSurface textarea{display:block;width:100%;height:clamp(12rem,55dvh,42rem);resize:vertical;margin:18px 0;font:inherit;font-size:17px;line-height:1.75;padding:16px;box-sizing:border-box}
+.writing-tools button,.writing-header button{flex-shrink:0}
+.work-filter{display:grid;gap:5px;font-size:12px;color:#c5bac8}
+.work-filter select{width:100%;min-width:0}
+.editor-queue{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 0;color:#c5bac8;font-size:13px}
+.editor-queue[hidden]{display:none}
+.editor-queue button:disabled{cursor:default}
+button.recent-story{width:100%;color:inherit;background:transparent;text-align:left}
+button.recent-story:hover,button.recent-story:focus-visible{background:#2d1d29}
+.field-label-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.writing-tools{justify-content:flex-end;flex-wrap:wrap}
+.writing-tools small{margin-right:auto}
+.editor-copy-result:not(:empty){margin:8px 0;color:#efbdce;font-size:13px}
+.writing-footer{flex-wrap:wrap}
+[data-copy-field]:disabled,#copyWriting:disabled{cursor:default}

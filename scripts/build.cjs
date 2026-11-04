@@ -33,7 +33,7 @@ async function main(){
   writeFileSync(page, html.replace(tags[0], () => updatedTag));
  }
  if(!entries.app||!entries.admin)throw Error('Both entry bundles are required');
- writeFileSync(path.join(root,'public/deployment.json'),JSON.stringify({version:'4.5.0',entries},null,2)+'\n');
+ writeFileSync(path.join(root,'public/deployment.json'),JSON.stringify({version:'4.8.0',entries},null,2)+'\n');
  console.log('Production bundles verified: '+Object.values(entries).join(', '));
 }
 main().catch(error=>{console.error(error);process.exitCode=1});

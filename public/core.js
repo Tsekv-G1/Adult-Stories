@@ -73,7 +73,32 @@ export async function saveStory(story,body){
  const sb=await supa();if(!s.id)delete s.id;const r=await sb.rpc('adult_save_story',{p_story:s,p_body:body??null,p_expected_updated_at:story.updated_at||null});if(r.error){if(r.error.message==='story_changed_elsewhere')throw Error('Энэ өгүүллэгийг өөр цонхноос шинэчилсэн байна. Нооргоо хадгалаад дахин ачаална уу.');throw r.error}alertChange();return r.data;
 }
 export async function removeStory(id){if(!online){if(await repository.mutate('remove-story',{id}))return;let d=parseLocal();d.stories=d.stories.filter(s=>s.id!==id);d.bodies=d.bodies.filter(b=>b.story_id!==id);if(d.site.featured_story_id===id)d.site.featured_story_id=d.stories[0]?.id||null;updateLocal(d);return}let sb=await supa();let r=await sb.from('stories').delete().eq('id',id);if(r.error?.code==='23503')throw Error('Төлбөрийн захиалгатай өгүүллэгийг устгах боломжгүй. Төлөвийг Архив болгож хадгална уу.');if(r.error)throw r.error;alertChange()}
-export async function saveSite(content){if(!online){if(await repository.mutate('save-site',{content}))return;let d=parseLocal();d.site={...content,id:'main'};updateLocal(d);return}let sb=await supa();let r=await sb.from('site_settings').upsert({id:'main',content});if(r.error)throw r.error;alertChange()}
+// Merge shared audio independently of other editor panels and reject concurrent writes.
+export async function saveSite(content,{sharedKey}={}){
+ const keys=['shared_preview_url','shared_cta_url'];
+ if(sharedKey&&!keys.includes(sharedKey))throw Error('invalid_audio_setting');
+ const merge=current=>{
+  if(sharedKey)return {...current,[sharedKey]:content[sharedKey]};
+  const next={...content};
+  for(const key of keys){if(current[key])next[key]=current[key];else delete next[key]}
+  return next;
+ };
+ if(!online){
+  const d=await repository.read({admin:true}),next=merge(d.site);
+  if(!await repository.mutate('save-site',{content:next}))updateLocal({...d,site:{...next,id:'main'}});
+  return next;
+ }
+ const sb=await supa(),row=await sb.from('site_settings').select('content,updated_at').eq('id','main').maybeSingle();
+ if(row.error)throw row.error;
+ const next=merge(row.data?.content||{});
+ const result=row.data
+  ?await sb.from('site_settings').update({content:next}).eq('id','main').eq('updated_at',row.data.updated_at).select('id')
+  :await sb.from('site_settings').insert({id:'main',content:next}).select('id');
+ if(result.error)throw result.error;
+ if(!result.data?.length)throw Error('Тохиргоог өөр цонхноос өөрчилсөн байна. Дахин оролдоно уу.');
+ alertChange();return next;
+}
+
 export async function saveAsset(asset){
  if(!online){journalMedia(asset);const stored=await repository.mutate('save-asset',{asset});if(stored){journalMedia(asset,true);return stored.result}const d=parseLocal(),existing=d.assets.find(a=>(a.asset_id&&a.asset_id===asset.asset_id)||a.url===asset.url);if(existing){journalMedia(asset,true);return existing}const a={...asset,id:asset.id||uid(),created_at:new Date().toISOString()};d.assets.unshift(a);updateLocal(d);journalMedia(asset,true);return a}
  const sb=await supa();const {data,error}=await sb.from('media_assets').insert(asset).select().single();if(error)throw error;alertChange();return data;

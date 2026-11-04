@@ -21,14 +21,46 @@ export async function importR2Page(cursor=''){
  const page=await mediaRequest({action:'media-list',cursor});if(!Array.isArray(page.items))throw Error('R2 жагсаалтын формат буруу байна.');const result=await mergeMedia(page.items);return{...result,count:page.items.length,cursor:page.next_cursor};
 }
 export function mountR2({reload,toast,editorToken,onAudio}){
- const $=s=>document.querySelector(s);let cursor='',importing=false,audioCursor='',audioBusy=false,audioTarget=null;
+ const $=s=>document.querySelector(s);let cursor='',importing=false,audioCursor='',requestVersion=0,audioTarget=null;
  $('#importR2Media').addEventListener('click',async()=>{if(importing)return;importing=true;const button=$('#importR2Media');button.disabled=true;
   try{const page=await importR2Page(cursor);cursor=page.cursor||'';await reload();button.textContent=cursor?'R2 · дараагийн 100 файл':'R2 САНГААС ЗУРАГ НЭМЭХ';toast(`${page.added} шинэ зураг санд нэмлээ. ${page.count-page.added} зураг өмнө нь байсан.`)}catch(error){toast(error.message,true)}finally{button.disabled=false;importing=false}
  });
  const dialog=$('#r2AudioDialog'),list=$('#r2AudioList');
- async function loadAudio(reset=false){if(audioBusy)return;audioBusy=true;$('#r2AudioMore').disabled=true;if(reset){audioCursor='';list.replaceChildren()}$('#r2AudioStatus').textContent='Аудионы санг уншиж байна…';
-  try{const page=await mediaRequest({action:'audio-list',cursor:audioCursor});if(!dialog.open)return;for(const item of page.items){const button=document.createElement('button');button.type='button';button.className='btn secondary r2-audio-item';button.textContent=item.filename+' · '+(item.bytes/1024/1024).toFixed(1)+' MB';button.addEventListener('click',()=>{if(editorToken()!==audioTarget){toast('Өгүүллэг солигдсон байна. Аудиогоо дахин сонгоно уу.',true);dialog.close();return}onAudio(item.reference);dialog.close()});list.append(button)}audioCursor=page.next_cursor||'';$('#r2AudioMore').hidden=!audioCursor;$('#r2AudioStatus').textContent=list.children.length?'Бүтэн аудиогоо сонгоно уу. Өгүүллэгээ хадгалж баталгаажуулна.':'Аудио алга. Cloudflare-ийн хувийн audio bucket-д MP3 эсвэл M4A файл нэмнэ үү.'}
-  catch(error){$('#r2AudioStatus').textContent=error.message;$('#r2AudioMore').hidden=false}finally{audioBusy=false;$('#r2AudioMore').disabled=false}
+ const more=$('#r2AudioMore'),status=$('#r2AudioStatus');
+ async function loadAudio(){
+  const version=++requestVersion;
+  const {kind,token}=audioTarget;
+  more.disabled=true;
+  status.textContent='Аудионы санг уншиж байна…';
+  try{
+   const page=await mediaRequest({action:kind==='full'?'audio-list':'preview-list',cursor:audioCursor});
+   if(version!==requestVersion||!dialog.open)return;
+   for(const item of page.items){
+    if(kind==='cta'&&!/\.mp3$/i.test(item.key))continue;
+    const button=document.createElement('button');
+    button.type='button';button.className='btn secondary r2-audio-item';
+    button.textContent=(item.key||item.filename)+' · '+(item.bytes/1024/1024).toFixed(1)+' MB';
+    button.addEventListener('click',()=>{
+     if(editorToken()===token)onAudio(item.reference,kind);
+     else toast('Өгүүллэг солигдсон байна. Аудиогоо дахин сонгоно уу.',true);
+     dialog.close();
+    });
+    list.append(button);
+   }
+   audioCursor=page.next_cursor||'';more.hidden=!audioCursor;
+   status.textContent=list.children.length?'Файлаа сонгоно уу.':audioCursor?'Энэ хуудсанд тохирох аудио алга. Дараагийн хуудсыг үзнэ үү.':kind==='full'?'Хувийн R2 санд аудио алга.':'Нийтийн R2 media санд тохирох аудио алга. Аудио файлаа тэр санд нэмнэ үү.';
+  }catch(error){
+   if(version!==requestVersion||!dialog.open)return;
+   status.textContent=error.message;more.hidden=false;more.textContent='Дахин оролдох';
+  }finally{if(version===requestVersion)more.disabled=false}
  }
- $('#chooseR2Audio').addEventListener('click',()=>{audioTarget=editorToken();dialog.showModal();loadAudio(true)});$('#r2AudioClose').addEventListener('click',()=>dialog.close());$('#r2AudioMore').addEventListener('click',()=>loadAudio());
+ function open(kind){
+  audioTarget={kind,token:editorToken()};audioCursor='';list.replaceChildren();
+  $('#r2AudioTitle').textContent=kind==='full'?'R2 · Хувийн бүтэн аудио':kind==='cta'?'R2 · Нийтийн CTA MP3':'R2 · Нийтийн preview аудио';
+  more.hidden=true;more.textContent='Цааш унших';dialog.showModal();loadAudio();
+ }
+ $('#chooseR2Audio').addEventListener('click',()=>open('full'));
+ for(const button of document.querySelectorAll('[data-r2-kind]'))button.onclick=()=>open(button.dataset.r2Kind);
+ $('#r2AudioClose').onclick=()=>dialog.close();
+ more.onclick=()=>{more.textContent='Цааш унших';loadAudio()};
 }

@@ -148,9 +148,7 @@ async function main(){
   assert.equal(await page.locator('#storySort').inputValue(),'newest');assert.equal(await page.locator('.story-card').count(),1);
   await page.locator('#resetFilters').click();assert.equal(await page.locator('.story-card').count(),2);assert.equal(new URL(page.url()).searchParams.has('q'),false);
   await page.locator('.story-cover[data-story="'+row.id+'"]').click();assert.equal(await page.locator('#readerSizeValue').innerText(),'18');
-  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw Error('blocked')}}}));
-  await page.locator('#readerShare').click();await page.locator('#readerShareFallback').waitFor({state:'visible'});
-  assert.equal(new URL(await page.locator('#readerShareLink').inputValue()).hash,'#story-'+row.id);
+  assert.equal(await page.locator('#readerShare, #readerShareFallback').count(),0);
   for(let i=0;i<6;i++)await page.locator('#readerLarger').click();assert.equal(await page.locator('#readerLarger').isDisabled(),true);assert.equal(await page.locator('#readerSizeValue').innerText(),'24');
   assert.deepEqual(errors,[]);checks++;await context.close();
  }
@@ -165,6 +163,164 @@ async function main(){
   await page.locator('#modalClose').click();await page.reload();await page.waitForFunction(()=>document.querySelector('#storyGrid').getAttribute('aria-busy')==='false');
   assert.equal(await page.locator('[data-save="'+row.id+'"]').getAttribute('aria-pressed'),'true');assert.deepEqual(errors,[]);checks++;await context.close();
  }
- console.log(`Browser checks passed: ${checks} (catalog, reader, admin, retry, missing bundles, direct links, publication, logout, offline recovery, invalid login, discovery, sharing and saved-library actions).`);
+ {
+  const other={...row,id:'323e4567-e89b-12d3-a456-426614174000',sort_order:0};
+  const {page,context,errors}=await setup({rows:[row,other]});
+  await page.route('**/api/member?*action=stats*',r=>r.fulfill({json:{ok:true,metrics:[{story_id:row.id,reads_30d:99,listens_30d:0}]}}));
+  await page.goto(base+'/');
+  const first=page.locator('.story-cover').first();
+  await first.waitFor();assert.equal(await first.getAttribute('data-story'),other.id);
+  await page.locator('#storySort').selectOption('popular');
+  await page.waitForFunction(id=>document.querySelector('.story-cover')?.dataset.story===id,row.id);
+  await page.locator('#resetFilters').click();assert.equal(await first.getAttribute('data-story'),other.id);
+  assert.deepEqual(errors,[]);checks++;await context.close();
+ }
+ {
+  const {page,context,errors}=await setup();
+  const origin='https://pub-7f988d691c09402594e0ee4ed4ff617e.r2.dev',shared=origin+'/intro.mp3';
+  await context.addInitScript(()=>{
+   if(!localStorage.getItem('adult_cms_v5_content')){
+    const stories=['Анхны өгүүллэг','Дараагийн өгүүллэг'].map((title,i)=>({id:'sample-'+i,title,cover_id:'cover',category:'Нууцлаг',status:'published',sort_order:i+1,overlay:{},audio_preview_url:i?'':'https://media.example.com/original.mp3'}));
+    localStorage.setItem('adult_cms_v5_content',JSON.stringify({stories,bodies:[],assets:[{id:'cover',url:location.origin+'/assets/hero-default.svg',filename:'Cover'}],site:{categories:['Нууцлаг']}}));
+   }
+   const session={access_token:'test-session',refresh_token:'test',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'test'}};
+   localStorage.setItem('sb-dgkyuijpviidrmqenclb-auth-token',JSON.stringify(session));
+  });
+  const actions=[];
+  await context.route(origin+'/**',r=>r.fulfill({status:200,contentType:'audio/mpeg',body:''}));
+  await page.route('**/api/adult-admin',r=>{
+   const b=r.request().postDataJSON();actions.push(b.action);
+   const audio={key:'intro.mp3',filename:'intro.mp3',bytes:1024,reference:shared};
+   return r.fulfill({json:{ok:true,items:b.cursor?[audio]:[],next_cursor:b.cursor?null:'more'}});
+  });
+  await page.goto(base+'/admin?local=1');await page.locator('[data-tab="stories"]').click();
+  await page.locator('[data-story-view="cards"]').click();
+  for(const width of [390,1280]){
+   await page.setViewportSize({width,height:840});
+   const card=page.locator('.cards-view .story-row').first();await card.waitFor();
+   const size=await card.locator('.story-list-copy').boundingBox();assert.ok(size.width>=100);assert.ok(await card.locator('.story-list-cover').isVisible());
+   assert.ok(await card.locator('[data-direction="down"]').isVisible());
+  }
+  await page.locator('#tabAudio').click();
+  for(const [kind,input] of [['preview','storyAudioPreview'],['cta','storyCtaAudio']]){
+   await page.locator('[data-r2-kind="'+kind+'"]').click();
+   await page.locator('#r2AudioMore').click();await page.locator('#r2AudioList button').first().click();
+   assert.equal(await page.locator('#'+input).inputValue(),shared);
+   await page.locator('[data-share-audio="'+kind+'"]').click();await page.locator('[data-unshare-audio="'+kind+'"]').waitFor();
+  }
+  assert.deepEqual(actions.filter(a=>a==='preview-list'),Array(4).fill('preview-list'));
+  assert.equal(await page.locator('#storyAudioFull').inputValue(),'');
+  const home=await context.newPage();
+  await home.goto(base+'/?local=1');
+  await home.locator('.story-card [data-audio]').first().waitFor();
+  assert.equal(await home.locator('.story-card [data-audio]').count(),await home.locator('.story-card').count());
+  const audioRequest=home.waitForRequest(shared);await home.locator('.story-card [data-audio]').first().click();await audioRequest;
+  await page.locator('[data-unshare-audio="preview"]').click();
+  await page.locator('[data-unshare-audio="preview"]').waitFor({state:'hidden'});
+  await home.reload();await home.locator('.story-card').first().waitFor();
+  assert.equal(await home.locator('.story-card [data-audio]').count(),1);
+  assert.equal(await home.locator('.story-card [data-audio]').getAttribute('data-audio'),'sample-0');
+  assert.deepEqual(errors,[]);checks++;await context.close();
+ }
+ {
+  const {page,context,errors}=await setup({mobile:true});
+  await page.goto(base+'/admin?local=1');await page.locator('[data-tab="stories"]').click();
+  await page.locator('#saveStory').click();await page.locator('#storyFormIssue').waitFor();
+  assert.ok(await page.locator('#storyTitle').evaluate(el=>el===document.activeElement));
+  await page.locator('#storyTitle').fill('Шинэ тест');await page.locator('#storyExcerpt').fill('Товч мэдээлэл');
+  await page.locator('[data-write="storyPreview"]').click();await page.locator('#writingDialog #storyPreview').fill('Эхний хоёр үг.');
+  assert.equal(await page.locator('#writingCount').innerText(),'3 үг');
+  await page.keyboard.press('Escape');assert.equal(await page.locator('#paneContent #storyPreview').inputValue(),'Эхний хоёр үг.');
+  await page.locator('[data-write="storyFull"]').click();await page.locator('#writingDialog #storyFull').fill('Зөвхөн уншигчийн үргэлжлэл.');
+  await page.keyboard.press('Control+s');await page.locator('.list-button.active').filter({hasText:'Шинэ тест'}).waitFor();
+  assert.equal(await page.locator('#paneContent #storyFull').inputValue(),'Зөвхөн уншигчийн үргэлжлэл.');
+  await page.locator('#storyListSearch').fill('  ШИНЭ   ТЕСТ  ');assert.equal(await page.locator('.story-row').count(),1);
+  await page.locator('#storyListStatus').selectOption('published');assert.equal(await page.locator('.story-row').count(),0);
+  await page.locator('#clearStoryFilters').click();assert.ok(await page.locator('.story-row').count()>1);
+  assert.deepEqual(errors,[]);checks++;await context.close();
+ }
+ {
+  const {page,context,errors}=await setup();
+  await context.addInitScript(()=>localStorage.setItem('sb-dgkyuijpviidrmqenclb-auth-token',JSON.stringify({access_token:'test-session',refresh_token:'test',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'test'}})));
+  const saved=[];let failList=false,failBody=true;
+  await page.route('**/*.supabase.co/rest/v1/**',async r=>{
+   const name=new URL(r.request().url()).pathname.split('/').pop();
+   if(name==='is_admin')return r.fulfill({json:true});
+   if(name==='adult_save_story'){
+    const payload=r.request().postDataJSON().p_story;saved.push(payload);
+    failList=saved.length===1;
+    return r.fulfill({json:{...payload,id:row.id,updated_at:'2026-01-01T00:00:00Z'}});
+   }
+   if(name==='story_private')return failBody?r.fulfill({status:503,json:{message:'offline'}}):r.fulfill({json:[{story_id:row.id,full_text:'Сэргэсэн текст'}]});
+   if(name==='stories'&&failList)return r.fulfill({status:403,json:{message:'refresh failed'}});
+   return r.fulfill({json:name==='stories'?[{...row,series_title:'Нууц цуврал',tags:['зуны аялал']}]:[]});
+  });
+  await page.route('**/api/adult-admin',r=>r.fulfill({json:{ok:true,orders:[],members:[],recoveries:[],report:{}}}));
+  await page.goto(base+'/admin');await page.locator('[data-tab="stories"]').click();
+  await page.locator('#storyListSearch').fill('  ЗУНЫ    АЯЛАЛ  ');await page.locator('.list-button').first().click();
+  await page.locator('#bodyLoadIssue').waitFor();await page.locator('#storyTitle').fill('Өөрчилсөн гарчиг');
+  failBody=false;await page.locator('#retryStoryBody').click();await page.locator('#bodyLoadIssue').waitFor({state:'hidden'});
+  assert.equal(await page.locator('#storyTitle').inputValue(),'Өөрчилсөн гарчиг');assert.equal(await page.locator('#storyFull').inputValue(),'Сэргэсэн текст');
+  page.once('dialog',d=>d.accept());await page.locator('#newStory').click();
+  await page.locator('#storyTitle').fill('Шинэ гарчиг');await page.locator('#storyExcerpt').fill('Товч');await page.locator('#storyPreview').fill('Эхлэл');
+  await page.locator('#saveStory').click();await page.waitForFunction(()=>document.querySelector('#toast').textContent.includes('Жагсаалтыг шинэчлэх'));
+  await page.locator('#saveStory').click();await page.waitForFunction(()=>!document.querySelector('#appRoot').inert);
+  assert.equal(saved.length,2);assert.ok(!saved[0].id);assert.equal(saved[1].id,row.id);
+  assert.deepEqual(errors,[]);checks++;await context.close();
+ }
+ {
+  const {page,context,errors}=await setup();
+  const rows=['Эхний','Хоёр дахь','Гурав дахь'].map((title,i)=>({...row,id:'queue-'+i,title,sort_order:i,excerpt:'',cover_id:i===2?'cover':null,
+   updated_at:'2026-01-0'+(i+1)+'T12:00:00Z',tags:i<2?['цуврал']:[]}));
+  await context.addInitScript(stories=>{
+   if(!localStorage.getItem('adult_cms_v5_content'))localStorage.setItem('adult_cms_v5_content',JSON.stringify({
+    stories,site:{categories:['Нууцлаг'],shared_preview_url:'https://media.example.com/global.mp3'},
+    assets:[{id:'cover',url:location.origin+'/assets/hero-default.svg',filename:'Cover'}],bodies:[]
+   }));
+  },rows);
+  await page.goto(base+'/admin?local=1');
+  const recent=page.locator('#recentStories button').first();
+  assert.equal(await recent.getAttribute('data-recent-id'),'queue-2');
+  await recent.click();await page.waitForFunction(()=>document.querySelector('#storyTitle').value==='Гурав дахь');
+  await page.locator('#workFilter').selectOption('audio');assert.equal(await page.locator('.story-row').count(),0);
+  await page.locator('#workFilter').selectOption('cover');assert.equal(await page.locator('.story-row').count(),2);
+  await page.locator('#workFilter').selectOption('text');
+  await page.locator('#storyListSearch').fill('цуврал');await page.locator('#storyListSearch').press('Enter');
+  await page.waitForFunction(()=>document.activeElement.id==='storyTitle');
+  await page.locator('#storyTitle').fill('');
+  await page.locator('#queueNext').click();await page.locator('#storyFormIssue').waitFor();
+  assert.equal(await page.locator('#storyTitle').inputValue(),'');
+  assert.equal(await page.locator('.list-button.active').getAttribute('data-edit'),'queue-0');
+  await page.locator('#storyTitle').fill('Зассан');await page.locator('#storyExcerpt').fill('Товч танилцуулга');
+  await page.locator('#storyExcerpt').press('Control+Enter');
+  await page.waitForFunction(()=>document.querySelector('#storyTitle').value==='Хоёр дахь'&&!document.querySelector('#appRoot').inert);
+  assert.equal(await page.locator('.story-row').count(),1);assert.ok(await page.locator('#queueNext').isDisabled());
+  const firstSaved=await page.evaluate(()=>JSON.parse(localStorage.getItem('adult_cms_v5_content')).stories.find(s=>s.id==='queue-0'));
+  assert.equal(firstSaved.title,'Зассан');assert.equal(firstSaved.excerpt,'Товч танилцуулга');
+  await page.locator('#storyExcerpt').fill('Дараагийн танилцуулга');await page.locator('#queueNext').click();
+  await page.waitForFunction(()=>!document.querySelector('#appRoot').inert&&document.querySelectorAll('.story-row').length===0);
+  await page.locator('#clearStoryFilters').click();assert.equal(await page.locator('.story-row').count(),3);
+  assert.deepEqual(errors,[]);checks++;await context.close();
+ }
+ {
+  const {page,context,errors}=await setup({mobile:true});
+  await page.goto(base+'/admin?local=1');await page.locator('[data-tab="stories"]').click();
+  assert.ok(await page.locator('[data-copy-field="storyFull"]').isDisabled());
+  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.qaClipboard=text}}}));
+  const fields={storyTitle:'Засаж буй гарчиг',storyExcerpt:'  Товч танилцуулга  ',storyPreview:'Үнэгүй эхлэл\n\nДараагийн мөр',storyFull:'Хувийн үргэлжлэл'};
+  for(const [id,value] of Object.entries(fields)){
+   await page.locator('#'+id).fill(value);await page.locator('[data-copy-field="'+id+'"]').click();
+   assert.equal(await page.evaluate(()=>window.qaClipboard),value);
+  }
+  await page.locator('[data-write="storyFull"]').click();await page.locator('#writingDialog #storyFull').fill('Том цонхны текст');
+  await page.locator('#copyWriting').click();assert.equal(await page.evaluate(()=>window.qaClipboard),'Том цонхны текст');
+  await page.evaluate(()=>{navigator.clipboard.writeText=async()=>{throw Error('denied')};document.execCommand=()=>false});
+  await page.locator('#copyWriting').click();
+  assert.equal(await page.locator('#storyFull').evaluate(f=>f.value.slice(f.selectionStart,f.selectionEnd)),'Том цонхны текст');
+  assert.ok((await page.locator('#writingCopyStatus').innerText()).includes('Ctrl+C'));
+  await page.keyboard.press('Escape');assert.equal(await page.locator('#paneContent #storyFull').inputValue(),'Том цонхны текст');
+  assert.deepEqual(errors,[]);checks++;await context.close();
+ }
+ console.log(`Browser checks passed: ${checks} (catalog, reader, admin, retry, missing bundles, direct links, publication, logout, offline recovery, invalid login, discovery and saved-library actions).`);
 }
 main().catch(error=>{console.error(error);process.exitCode=1}).finally(async()=>{await browser?.close();await new Promise(resolve=>server.close(resolve))});

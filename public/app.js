@@ -20,6 +20,12 @@ $('#storySearch').value=state.search;$('#storySort').value=state.sort;
 let hasCatalog=false;
 let storyMetrics=new Map(),metricsRevision=0,readTimer=null;const trackedListen=new Set();
 const asset=id=>state.data?.assets.find(a=>a.id===id),story=id=>state.data?.stories.find(s=>s.id===id&&(studioMode||isPublishedStory(s)));
+function publicCatalog(data){
+ const site={...defaults().site,...data.site};
+ const shared=safeUrl(site.shared_preview_url);
+ const stories=shared&&!isPrivateAudio(shared)?data.stories.map(row=>({...row,audio_preview_url:shared})):data.stories;
+ return {...data,site,stories};
+}
 const visible=()=>state.data.stories.filter(s=>isPublishedStory(s)).sort((a,b)=>Number(a.sort_order??100)-Number(b.sort_order??100));
 const adultConfirmed=()=>localStorage.getItem('adult_v5_age')==='yes';
 const audioAvailable=s=>adultConfirmed()&&!!safeUrl(s?.audio_preview_url)&&!isPrivateAudio(s.audio_preview_url),durationText=s=>(hasActiveStoryEntitlement(grantedEntitlements,s?.id)||(!online&&(state.member||state.unlocked.includes(s?.id))))&&audioSeconds(s)?durationLabel(s):'';
@@ -43,7 +49,7 @@ function persistDiscovery(){
  if(studioMode)return;const next=discoveryUrl(location.href,state);if(next!==location.href)history.replaceState(history.state,'',next);
 }
 function resetDiscovery(){
- state.search='';state.filter='Бүгд';state.shortOnly=false;state.sort='popular';$('#storySearch').value='';$('#storySort').value=state.sort;persistDiscovery();renderGrid();$('#storySearch').focus({preventScroll:true});
+ state.search='';state.filter='Бүгд';state.shortOnly=false;state.sort='editor';$('#storySearch').value='';$('#storySort').value=state.sort;persistDiscovery();renderGrid();$('#storySearch').focus({preventScroll:true});
 }
 $('#resetFilters').addEventListener('click',resetDiscovery);
 function renderSavedLibrary(){
@@ -57,11 +63,6 @@ function openSavedLibrary(){
  modal('Миний сан','<label class="sr-only" for="librarySearch">Хадгалсан өгүүллэгээс хайх</label><input id="librarySearch" type="search" placeholder="Хадгалсан өгүүллэгээс хайх…" maxlength="180" autocomplete="off"><p id="libraryResultCount" class="small" role="status"></p><p id="libraryFeedback" class="small" role="status" hidden></p><button type="button" id="libraryUndo" class="btn outline" hidden>Сүүлийн үйлдлийг буцаах</button><div id="libraryResults"></div>');
  $('#modalBody').dataset.libraryView='yes';$('#librarySearch').addEventListener('input',renderSavedLibrary);$('#libraryUndo').addEventListener('click',undoFeedback);renderSavedLibrary();if(!$('#feedbackToast').hidden){$('#libraryFeedback').textContent=$('#feedbackText').textContent;$('#libraryFeedback').hidden=false;$('#libraryUndo').hidden=!feedbackAction;$('#feedbackToast').hidden=true}$('#librarySearch').focus();
 }
-$('#readerShare').addEventListener('click',async()=>{
- const id=state.reader;if(!id)return;const url=new URL(discoveryUrl(location.href,{search:'',filter:'Бүгд',sort:'popular',shortOnly:false}));url.hash='#story-'+encodeURIComponent(id);
- try{if(!navigator.clipboard?.writeText)throw Error('clipboard_unavailable');await navigator.clipboard.writeText(url.href);if(state.reader!==id)return;$('#readerShareNotice').textContent='Өгүүллэгийн холбоос хуулагдлаа.';$('#readerShareNotice').hidden=false;$('#readerShareFallback').hidden=true}
- catch{if(state.reader!==id)return;$('#readerShareNotice').textContent='Холбоосыг гараар хуулж болно.';$('#readerShareNotice').hidden=false;$('#readerShareLink').value=url.href;$('#readerShareFallback').hidden=false;$('#readerShareLink').focus();$('#readerShareLink').select()}
-});
 let activeMemberId=null,grantedEntitlements=[],entitlementSignature='[]';
 function updateEntitlements(rows){
  const active=activeEntitlements(rows),signature=JSON.stringify(active.map(row=>[row.story_id||'',row.expires_at||'']).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
@@ -116,7 +117,7 @@ function renderGrid(){
  if(state.sort==='listened')rows.sort((a,b)=>Number(activity(b).listens_30d)-Number(activity(a).listens_30d)||Number(a.sort_order??100)-Number(b.sort_order??100));
  if(state.sort==='newest')rows.sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))||Number(a.sort_order??100)-Number(b.sort_order??100));
  state.audioQueue=rows.map(s=>s.id);
- $('#resetFilters').hidden=!(normalizeSearch(state.search)||state.filter!=='Бүгд'||state.shortOnly||state.sort!=='popular');if(hasCatalog)persistDiscovery();
+ $('#resetFilters').hidden=!(normalizeSearch(state.search)||state.filter!=='Бүгд'||state.shortOnly||state.sort!=='editor');if(hasCatalog)persistDiscovery();
  $('#storyResultCount').textContent=rows.length+' өгүүллэг';$('#clearSearch').hidden=!state.search;
  $('#storyGrid').innerHTML=rows.length?rows.map(s=>{const category=(state.data.site.categories||[]).includes(s.category)?s.category:'',duration=durationText(s),preview=audioAvailable(s);return `<article class="story-card"><button class="story-cover" data-story="${esc(s.id)}" aria-label="${esc(s.title)} — унших"><div class="cover-overlay"></div><span class="cover-line"><small>${esc(category)}</small><strong role="heading" aria-level="3">${esc(s.title)}</strong></span></button><div class="story-category">${esc(category)}</div><p>${esc(excerptText(s.excerpt,105))}</p><div class="story-actions">${preview||duration?`<div class="story-listen">${preview?`<button class="plain-btn audio" data-audio="${esc(s.id)}" aria-label="${esc(s.title)} — аудио эхлэлийг сонсох">▶ Сонсож үзэх</button>`:''}${duration?`<span class="story-duration">${esc(duration)}</span>`:''}</div>`:''}<button class="plain-btn" data-story="${esc(s.id)}">Унших ↗</button><button class="plain-btn save-action" data-save="${esc(s.id)}" aria-label="${esc(s.title)} — ${state.saved.includes(s.id)?'хадгалснаас хасах':'хадгалах'}" aria-pressed="${state.saved.includes(s.id)}">${state.saved.includes(s.id)?'◆':'◇'}</button></div></article>`}).join(''):`<div class="empty">${pool.length?'Тохирох өгүүллэг олдсонгүй.<button type="button" class="btn outline" data-reset-discovery>Хайлтыг цэвэрлэх</button>':'Шинэ өгүүллэгүүд удахгүй нэмэгдэнэ.'}</div>`;
  rows.forEach((s,index)=>picture($(`.story-cover[data-story="${CSS.escape(s.id)}"]`),asset(s.cover_id)?.url,s.overlay,index<2));const availableSaved=state.saved.filter(id=>story(id)).length;$('#savedCount').textContent=availableSaved;$('#savedCount').classList.toggle('hidden',!availableSaved);syncAudioButtons();
@@ -126,7 +127,7 @@ function readerStatus(message='',retry=false){
  $('#readerStatus').hidden=!message;$('#readerStatusText').textContent=message;$('#readerRetry').hidden=!retry;
 }
 function resetReaderContent(s,checking=false){
- if(!s)return;$('#readerShareNotice').hidden=true;$('#readerShareFallback').hidden=true;readerRequest++;readerLoading=checking;readerAudioTarget=null;
+ if(!s)return;readerRequest++;readerLoading=checking;readerAudioTarget=null;
  $('#readerText').innerHTML=textParas(s.preview_text).map(p=>`<p>${esc(p)}</p>`).join('')||'<p>Энэ өгүүллэгийн эхлэл удахгүй нэмэгдэнэ.</p>';
  $('#readerText').setAttribute('aria-busy',String(checking));$('#readerAudioFull').hidden=true;$('#readerAudioPreview').hidden=true;$('#paywall').classList.add('hidden');
  readerStatus(checking?'Үргэлжлэлийг ачаалж байна…':'');
@@ -246,7 +247,7 @@ async function reload(){
  reloading=(async()=>{
   try{
    const data=await getData();if(!data)return;
-   state.data={...data,site:{...defaults().site,...data.site}};hasCatalog=true;
+   state.data=publicCatalog(data);hasCatalog=true;
    renderHero();renderGrid();renderContinue();$('#storyGrid').setAttribute('aria-busy','false');$('#catalogStatus').hidden=true;refreshStoryMetrics();
    if(state.reader){
     const nextReader=JSON.stringify([story(state.reader),state.data.site.visual_theme,state.data.assets]);
@@ -289,7 +290,7 @@ if(studioMode){
  const endStudioDrag=event=>{if(!studioDragTarget||event.pointerId!==studioDragTarget.id)return;window.parent.postMessage({type:'adult-studio-crop-drag',phase:'end',scope:studioDragTarget.scope,x:event.clientX,y:event.clientY},location.origin);studioDragTarget=null};
  document.addEventListener('pointerup',endStudioDrag,true);document.addEventListener('pointercancel',endStudioDrag,true);document.addEventListener('lostpointercapture',endStudioDrag,true);
 }
-window.addEventListener('message',async event=>{if(event.origin!==location.origin||event.source!==window.parent)return;if(event.data?.type==='adult-studio-crop-live'){const scope=event.data.scope,target=scope==='home'?$('#heroImage'):$('#readerCover'),image=target?.querySelector('img');if(image&&event.data.crop)applyPhoto(image,event.data.crop);if(scope==='story'&&event.data.storyId){const card=$(`.story-cover[data-story="${CSS.escape(event.data.storyId)}"]`),cardImage=card?.querySelector('img');if(cardImage&&event.data.crop)applyPhoto(cardImage,event.data.crop)}return}if(event.data?.type==='adult-studio-preview'){const next=event.data.data;if(!next?.site||!Array.isArray(next.stories)||!Array.isArray(next.assets))return;state.data={...next,site:{...defaults().site,...next.site}};state.member=false;state.unlocked=[];state.reader=null;document.body.classList.remove('reading');const viewKey=event.data.view+':'+event.data.storyId;if(viewKey!==previousPreviewView){window.scrollTo(0,0);previousPreviewView=viewKey}renderHero();renderGrid();if(event.data.view==='reader'&&story(event.data.storyId)){state.reader=event.data.storyId;await renderReader()}else{$('#homeMain').classList.remove('hidden');$('#readerView').classList.add('hidden')}}});window.parent.postMessage({type:'adult-studio-ready'},location.origin);
+window.addEventListener('message',async event=>{if(event.origin!==location.origin||event.source!==window.parent)return;if(event.data?.type==='adult-studio-crop-live'){const scope=event.data.scope,target=scope==='home'?$('#heroImage'):$('#readerCover'),image=target?.querySelector('img');if(image&&event.data.crop)applyPhoto(image,event.data.crop);if(scope==='story'&&event.data.storyId){const card=$(`.story-cover[data-story="${CSS.escape(event.data.storyId)}"]`),cardImage=card?.querySelector('img');if(cardImage&&event.data.crop)applyPhoto(cardImage,event.data.crop)}return}if(event.data?.type==='adult-studio-preview'){const next=event.data.data;if(!next?.site||!Array.isArray(next.stories)||!Array.isArray(next.assets))return;state.data=publicCatalog(next);state.member=false;state.unlocked=[];state.reader=null;document.body.classList.remove('reading');const viewKey=event.data.view+':'+event.data.storyId;if(viewKey!==previousPreviewView){window.scrollTo(0,0);previousPreviewView=viewKey}renderHero();renderGrid();if(event.data.view==='reader'&&story(event.data.storyId)){state.reader=event.data.storyId;await renderReader()}else{$('#homeMain').classList.remove('hidden');$('#readerView').classList.add('hidden')}}});window.parent.postMessage({type:'adult-studio-ready'},location.origin);
 }else{
  libraryReady=true;await library.setUser(null);memberAuth.init();await reload();await restoreRoute();
  subscribeChanges(()=>reload());setInterval(()=>{if(!document.hidden&&navigator.onLine!==false)reload()},Math.max(15,Number(CONFIG.refreshSeconds)||30)*1000);window.addEventListener('focus',()=>{memberAuth.init();reload()});

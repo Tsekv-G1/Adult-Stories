@@ -1,3 +1,4 @@
+import {normalizeSearch} from './discovery.js';
 import {mountR2} from './r2-media.js?v=8.21.0';
 import {cropConfiguration,cropConfigurationMatches,decodeCropJob,audioPreviewIsStale} from './audio-preview-state.js?v=8.23.0';
 import {optimizedImage} from './image-delivery.js?v=8.5.0';
@@ -16,13 +17,47 @@ let storyOverlay=overlayDefault(),homeOverlay=overlayDefault(),themeDraft=visual
 let storySaving=false;
 let storyDirty=false,homeDirty=false,themeDirty=false,settingsDirty=false,bodyReady=true,editToken=0;
 let audioState={url:'',seconds:0,status:'empty',promise:null},audioToken=0,audioProbeTimer;
-function currentCropConfiguration(){return cropConfiguration({reference:safeUrl($('#storyAudioFull').value.trim()),start:parseClockTime($('#storyPreviewStart').value),end:parseClockTime($('#storyPreviewEnd').value),ctaUrl:safeUrl($('#storyCtaAudio').value.trim()),ctaGap:Number($('#storyCtaGap').value)})}
+const audioFields={preview:'storyAudioPreview',cta:'storyCtaAudio'};
+function effectiveCta(){return safeUrl(data?.site.shared_cta_url||$('#storyCtaAudio').value.trim())}
+function renderSharedAudio(){
+ for(const kind of Object.keys(audioFields)){
+  const url=data?.site['shared_'+kind+'_url'];
+  const status=$('#shared-'+kind);
+  const tip=kind==='preview'?'Бүх өгүүллэгт энэ preview тоглоно':'Шинээр бэлтгэх бүх preview-д энэ CTA залгагдана';
+  status.textContent=url?tip+' · '+url.split('/').pop():'';
+  $('[data-unshare-audio="'+kind+'"]').hidden=!url;
+ }
+}
+let savingShared=false;
+for(const button of $$('[data-share-audio],[data-unshare-audio]')){
+ button.addEventListener('click',async()=>{
+  if(savingShared)return;
+  const kind=button.dataset.shareAudio||button.dataset.unshareAudio;
+  const key='shared_'+kind+'_url';
+  let value='';
+  try{
+   if(button.dataset.shareAudio){
+    value=safeUrl($('#'+audioFields[kind]).value.trim());
+    if(!value)throw Error('Эхлээд R2 сангаас аудиогоо сонгоно уу.');
+    const url=new URL(value);
+    if(url.protocol!=='https:'||url.search||url.hash||isPrivateAudio(value)||url.origin!==new URL(CONFIG.r2PublicBaseUrl).origin||value===safeUrl($('#storyAudioFull').value))
+     throw Error('Нийтийн R2 сангаас тусдаа аудио сонгоно уу.');
+    if(kind==='cta'&&!/\.mp3$/i.test(url.pathname))throw Error('CTA-д MP3 файл сонгоно уу.');
+   }
+   savingShared=true;button.disabled=true;
+   const saved=await saveSite({[key]:value},{sharedKey:key});
+   data.site={...data.site,[key]:saved[key]};renderSharedAudio();syncCtaAudio();queuePreviews();
+   toast(value?'Бүх өгүүллэгийн тохиргоог хадгаллаа.':'Өгүүллэг тус бүрийн аудио тохиргоог сэргээв.');
+  }catch(error){toast(error.message,true)}finally{savingShared=false;button.disabled=false}
+ });
+}
+function currentCropConfiguration(){return cropConfiguration({reference:safeUrl($('#storyAudioFull').value.trim()),start:parseClockTime($('#storyPreviewStart').value),end:parseClockTime($('#storyPreviewEnd').value),ctaUrl:effectiveCta(),ctaGap:Number($('#storyCtaGap').value)})}
 function syncCtaAudio(){
- const input=$('#storyCtaAudio'),cta=$('#ctaAudioPlayer'),final=$('#audioCombinedPreview'),status=$('#ctaAudioStatus'),url=safeUrl(input.value.trim()),preview=safeUrl($('#storyAudioPreview').value.trim());
+ const cta=$('#ctaAudioPlayer'),final=$('#audioCombinedPreview'),status=$('#ctaAudioStatus'),url=effectiveCta(),preview=safeUrl($('#storyAudioPreview').value.trim());
  if(url&&!isPrivateAudio(url)){if(cta.getAttribute('src')!==url){cta.src=url;cta.load()}cta.hidden=false}else{cta.pause();cta.removeAttribute('src');cta.hidden=true}
  if(preview&&!isPrivateAudio(preview)){if(final.getAttribute('src')!==preview){final.src=preview;final.load()}final.hidden=false}else{final.pause();final.removeAttribute('src');final.hidden=true}
  const previous=storyOverlay.audio_cta_rendered_url||'',stale=audioPreviewIsStale({preview,current:currentCropConfiguration(),rendered:{ctaUrl:previous,ctaGap:storyOverlay.audio_cta_rendered_gap||1.5,previewUrl:storyOverlay.audio_preview_rendered_url||'',start:storyOverlay.audio_preview_rendered_start,end:storyOverlay.audio_preview_rendered_end,reference:storyOverlay.audio_preview_rendered_source||''}});
- status.textContent=!preview?(url?'CTA URL бэлэн. IN/OUT хэсгээ сонгоод preview-г бэлтгэнэ үү.':'CTA оруулбал preview бэлтгэх үед нэг MP3-д залгана.'):
+ status.textContent=data?.site.shared_preview_url?'Сайт дээр бүх өгүүллэгийн нийтлэг preview тоглож байна. Доорх тоглуулагчаар тухайн өгүүллэгийн файлыг шалгана уу.':!preview?(url?'CTA URL бэлэн. IN/OUT хэсгээ сонгоод preview-г бэлтгэнэ үү.':'CTA оруулбал preview бэлтгэх үед нэг MP3-д залгана.'):
  stale?'Анхаар: аудио эсвэл CTA тохиргоо өөрчлөгдсөн. Сайтад хуучин preview тоглож байгаа тул «PREVIEW БЭЛДЭХ» товчийг дахин дарна уу.':
  url?'CTA бэлэн MP3 дотор нэгтгэгдсэн.':'Бэлэн preview нэг MP3 файл байна.';
 }
@@ -39,8 +74,72 @@ function setTab(t){active=t;$$('[data-tab]').forEach(b=>b.classList.toggle('acti
 function setEditorTab(tab){$$('[data-editor-tab]').forEach(b=>{const on=b.dataset.editorTab===tab;b.classList.toggle('active',on);b.setAttribute('aria-selected',String(on))});$$('[data-editor-pane]').forEach(p=>{const on=p.dataset.editorPane===tab;p.hidden=!on;p.classList.toggle('active',on)});queuePreviews()}
 $$('[data-editor-tab]').forEach(b=>b.addEventListener('click',()=>setEditorTab(b.dataset.editorTab)));
 $$('[data-open-design]').forEach(b=>b.addEventListener('click',()=>setTab('design')));
-function markStory(){if(!data)return;storyDirty=true;drafts.schedule();working('Хадгалаагүй өөрчлөлт');updateStoryMeta();queuePreviews()}
+function markStory(){if(!data)return;if(!$('#storyFormIssue').hidden)clearStoryIssue();storyDirty=true;drafts.schedule();working('Хадгалаагүй өөрчлөлт');updateStoryMeta();queuePreviews()}
+const writingDialog=$('#writingDialog');
+let writingField=null,writingMarker=null;
+function wordCount(text){return String(text).match(/[\p{L}\p{N}]+(?:[-’'][\p{L}\p{N}]+)*/gu)?.length||0}
+const copyButtons=$$('[data-copy-field]');
+const copyResetTimers=new WeakMap();
+async function copyEditorText(field,button){
+ if(!field||field.disabled||!field.value.trim())return;
+ const text=field.value,token=editToken;
+ const status=writingDialog.open?$('#writingCopyStatus'):$('#editorCopyStatus');
+ let copied=false;
+ try{await navigator.clipboard.writeText(text);copied=true}catch{
+  if(editToken!==token||field.value!==text||!field.isConnected)return;
+  field.focus();field.select();
+  try{copied=document.execCommand('copy')}catch{}
+  if(copied)button.focus();
+ }
+ if(editToken!==token)return;
+ clearTimeout(copyResetTimers.get(button));
+ const label=document.querySelector('label[for="'+field.id+'"]').textContent.replace(' *','');
+ status.textContent=copied?label+' · Хууллаа ✓':'Текст сонгогдлоо. Ctrl+C эсвэл ⌘C дарж хуулна уу.';
+ // Show feedback beside the control even when the editor heading is off screen.
+ const original=button.dataset.copyLabel||button.textContent;
+ button.dataset.copyLabel=original;
+ button.textContent=copied?'Хууллаа ✓':'Сонгогдлоо';
+ copyResetTimers.set(button,setTimeout(()=>{button.textContent=original},2200));
+}
+for(const button of copyButtons){
+ const id=button.dataset.copyField;
+ button.setAttribute('aria-label',document.querySelector('label[for="'+id+'"]').textContent.replace(' *','')+' хуулах');
+ button.onclick=()=>copyEditorText($('#'+id),button);
+}
+$('#copyWriting').onclick=()=>copyEditorText(writingField,$('#copyWriting'));
+function updateWritingTools(){
+ for(const button of copyButtons){
+  const field=$('#'+button.dataset.copyField);
+  button.disabled=field.disabled||!field.value.trim();
+ }
+ $('#copyWriting').disabled=!writingField?.value.trim();
+ for(const id of ['storyPreview','storyFull']){
+  const field=$('#'+id),label=field.disabled?'Ачаалж байна…':wordCount(field.value)+' үг';
+  $('#'+id+'Count').textContent=label;
+  $('[data-write="'+id+'"]').disabled=field.disabled;
+  if(field===writingField)$('#writingCount').textContent=label;
+ }
+}
+for(const button of $$('[data-write]'))button.onclick=()=>{
+ const field=$('#'+button.dataset.write);
+ if(field.disabled||writingDialog.open)return;
+ $('#writingCopyStatus').textContent='';writingField=field;writingMarker=document.createComment('writing field');field.before(writingMarker);
+ $('#writingHeading').textContent=document.querySelector('label[for="'+field.id+'"]').textContent.replace(' *','');
+ $('#writingSurface').append(field);updateWritingTools();writingDialog.showModal();field.focus();
+};
+function returnWritingField(){
+ if(!writingMarker)return;
+ writingMarker.replaceWith(writingField);writingMarker=null;writingField=null;
+}
+function closeWriting(){returnWritingField();writingDialog.close()}
+$('#endWriting').onclick=closeWriting;
+writingDialog.addEventListener('close',returnWritingField);
+function clearStoryIssue(){
+ $('#storyFormIssue').hidden=true;
+ for(const field of $$('.story-editor [aria-invalid="true"]'))field.removeAttribute('aria-invalid');
+}
 function updateStoryMeta(){
+ updateQueueControls();updateWritingTools();
  $('#storyAutoSlug').textContent=$('#storyTitle').value.trim()?automaticSlug($('#storyTitle').value,allStories(),editing):'Гарчгаас автоматаар';
  $('#storyPublishedAt').textContent=editing?.publish_at?new Date(editing.publish_at).toLocaleString('mn-MN'):'Нийтлэх үед автоматаар';
  $('#storyCoverTitle').textContent=$('#storyTitle').value||'Өгүүллэгийн гарчиг';
@@ -78,11 +177,53 @@ fillAudioArtPicker();drawAudioArtwork();
 $('#storyAudioArtAsset').addEventListener('change',updateAudioArtwork);$('#storyAudioArtSearch').addEventListener('input',()=>fillAudioArtPicker($('#storyAudioArtAsset').value));for(const key of ['Zoom','X','Y','Shade'])$('#storyAudioArt'+key).addEventListener('input',updateAudioArtwork);$$('[data-audio-art-device]').forEach(button=>button.addEventListener('click',()=>{audioArtDevice=button.dataset.audioArtDevice;$$('[data-audio-art-device]').forEach(item=>{const active=item===button;item.classList.toggle('active',active);item.setAttribute('aria-pressed',String(active))});drawAudioArtwork()}));$('#resetAudioArt').addEventListener('click',()=>{storyOverlay.audio_player=audioArtDefault();$('#storyAudioArtSearch').value='';fillAudioArtPicker('');drawAudioArtwork();markStory()});
 let audioArtDrag=null;const audioArtPreview=$('#audioArtDesignPreview');audioArtPreview.addEventListener('pointerdown',event=>{if(event.target.closest('button'))return;const rect=audioArtPreview.getBoundingClientRect(),values=audioArtValues();audioArtDrag={pointerId:event.pointerId,x:event.clientX,y:event.clientY,width:rect.width,height:rect.height,baseX:values.x,baseY:values.y};audioArtPreview.setPointerCapture(event.pointerId);audioArtPreview.classList.add('dragging')});audioArtPreview.addEventListener('pointermove',event=>{if(!audioArtDrag||event.pointerId!==audioArtDrag.pointerId)return;$('#storyAudioArtX').value=Math.max(0,Math.min(100,Math.round(audioArtDrag.baseX-(event.clientX-audioArtDrag.x)/audioArtDrag.width*100)));$('#storyAudioArtY').value=Math.max(0,Math.min(100,Math.round(audioArtDrag.baseY-(event.clientY-audioArtDrag.y)/audioArtDrag.height*100)));$('#storyAudioArtX').dispatchEvent(new Event('input',{bubbles:true}))});for(const type of ['pointerup','pointercancel'])audioArtPreview.addEventListener(type,event=>{if(audioArtDrag&&event.pointerId===audioArtDrag.pointerId){audioArtDrag=null;audioArtPreview.classList.remove('dragging')}});
 function fillCategories(value){const cats=[...new Set(data.site.categories||[])];$('#storyCategory').innerHTML='<option value="">Ангилалгүй</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')+(value&&!cats.includes(value)?`<option value="${esc(value)}">${esc(value)} · Архивласан</option>`:'');$('#storyCategory').value=value||''}
-function dashboard(){const stories=allStories();$('#dashboardStats').innerHTML=[['Нийт өгүүллэг',stories.length],['Нийтлэгдсэн',stories.filter(s=>s.status==='published').length],['Ноорог',stories.filter(s=>s.status==='draft').length],['Media assets',data.assets.length]].map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('');$('#recentStories').innerHTML=stories.slice(0,7).map(s=>`<div class="recent-story"><div><strong>${esc(s.title)}</strong><small>${esc(s.category)}</small></div><span class="status ${esc(s.status)}">${statusNames[s.status]||esc(s.status)}</span></div>`).join('')||'<div class="empty">Өгүүллэг алга.</div>';
+function lastEdited(story){return Date.parse(story.updated_at)||Date.parse(story.created_at)||0}
+$('#recentStories').addEventListener('click',event=>{
+ const button=event.target.closest('[data-recent-id]');
+ if(button){setTab('stories');editStory(button.dataset.recentId)}
+});
+function dashboard(){const stories=allStories();$('#dashboardStats').innerHTML=[['Нийт өгүүллэг',stories.length],['Нийтлэгдсэн',stories.filter(s=>s.status==='published').length],['Ноорог',stories.filter(s=>s.status==='draft').length],['Media assets',data.assets.length]].map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('');$('#recentStories').innerHTML=[...stories].sort((a,b)=>lastEdited(b)-lastEdited(a)).slice(0,7).map(s=>`<button type="button" class="recent-story" data-recent-id="${esc(s.id)}"><span><strong>${esc(s.title)}</strong><small>${esc(s.category)}</small></span><span class="status ${esc(s.status)}">${statusNames[s.status]||esc(s.status)}</span></button>`).join('')||'<div class="empty">Өгүүллэг алга.</div>';
  $('#connectionLabel').textContent=online?'Supabase · Online':persistenceInfo().mode==='disk'?'Компьютерт файлд хадгалсан':'Зөвхөн энэ браузерт';$('#modeBadge').textContent=online?'LIVE / SUPABASE':persistenceInfo().mode==='disk'?'LOCAL FILE':'BROWSER DEMO';$('#syncExplainer').textContent=online?'Хадгалсан өөрчлөлт Supabase руу шууд бичигдэнэ.':persistenceInfo().mode==='disk'?'Контент, зургийн сан компьютерийн Documents / Adult Stories CMS дотор файлд хадгалагдана. Сервер дахин асаахад хэвээр байна.':'Локал туршилтын өгөгдөл энэ браузерт хадгалагдана. Онлайн хадгалалт болон төхөөрөмж хоорондын sync-д Supabase ашиглана.';$('#setupAlert').textContent=online?'Онлайн холболт идэвхтэй.':persistenceInfo().mode==='disk'?'Файл хадгалалт идэвхтэй · Өөр төхөөрөмжийн sync хийхэд Supabase холбоно.':'Браузерийн хадгалалт · Backup / Import хэсгээс хуулбар татаж болно.';
 }
 let storyListView='list';try{storyListView=localStorage.getItem('adult_story_list_view')==='cards'?'cards':'list'}catch{}
-function renderList(){if(!data)return;const q=$('#storyListSearch').value.toLowerCase(),status=$('#storyListStatus').value,root=$('#storyList');root.classList.toggle('cards-view',storyListView==='cards');$$('[data-story-view]').forEach(b=>{b.classList.toggle('active',b.dataset.storyView===storyListView);b.setAttribute('aria-pressed',String(b.dataset.storyView===storyListView))});const list=allStories().filter(s=>(status==='all'||status===s.status)&&`${s.title} ${s.category}`.toLowerCase().includes(q)).sort((a,b)=>Number(a.sort_order??100)-Number(b.sort_order??100));root.innerHTML=list.map(s=>{const image=asset(s.cover_id)?.url||'';return `<div class="story-row" draggable="true" data-story-id="${esc(s.id)}"><button class="list-button ${editing?.id===s.id?'active':''}" data-edit="${esc(s.id)}">${storyListView==='cards'&&image?`<img class="story-list-cover" src="${esc(optimizedImage(image,360))}" alt="" loading="lazy">`:''}<span class="story-list-copy"><strong><span class="story-grip" aria-hidden="true">⠿</span>${esc(s.title)}</strong><small>${esc(s.category||'Ангилалгүй')} · <span class="status ${esc(s.status)}">${statusNames[s.status]||esc(s.status)}</span></small></span></button><div class="story-order-buttons"><button type="button" data-order-story="${esc(s.id)}" data-direction="up" aria-label="${esc(s.title)} дээш эрэмбэлэх">↑</button><button type="button" data-order-story="${esc(s.id)}" data-direction="down" aria-label="${esc(s.title)} доош эрэмбэлэх">↓</button></div></div>`}).join('')||'<div class="empty">Өгүүллэг олдсонгүй.</div>'}
+let queueIds=[];
+function updateQueueControls(){
+ const index=queueIds.indexOf(editing?.id),button=$('#queueNext');
+ $('#editorQueue').hidden=index<0;
+ $('#queuePosition').textContent=index<0?'':`Шүүсэн жагсаалт · ${index+1} / ${queueIds.length}`;
+ const last=index===queueIds.length-1;
+ button.textContent=last?(storyDirty?'Хадгалах':'Сүүлчийн өгүүллэг'):storyDirty?'Хадгалаад дараагийнх →':'Дараагийн өгүүллэг →';
+ button.disabled=index<0||(last&&!storyDirty)||!bodyReady||storySaving;
+ const footer=$('#nextStoryFooter');
+ footer.hidden=index<0||last;footer.disabled=button.disabled;footer.textContent=button.textContent;
+}
+async function advanceQueue(){
+ const index=queueIds.indexOf(editing?.id);
+ if(index<0||!bodyReady||storySaving)return;
+ if(mediaWorkspace?.pendingForStory())return toast('Зураг оруулж дууссаны дараа үргэлжлүүлнэ үү.',true);
+ const following=queueIds.slice(index+1);
+ if(storyDirty)await saveStoryAction({following});
+ else if(following.length)await editStory(following[0]);
+}
+$('#queueNext').onclick=advanceQueue;
+$('#nextStoryFooter').onclick=advanceQueue;
+$('#workFilter').onchange=renderList;
+$('#storyListSearch').addEventListener('keydown',async event=>{
+ if(event.key!=='Enter'||event.isComposing||event.repeat||!queueIds.length)return;
+ event.preventDefault();const id=queueIds[0];await editStory(id);
+ if(editing?.id===id){setEditorTab('content');$('#storyTitle').focus()}
+});
+function renderList(){if(!data)return;const q=normalizeSearch($('#storyListSearch').value),status=$('#storyListStatus').value,root=$('#storyList');root.classList.toggle('cards-view',storyListView==='cards');$$('[data-story-view]').forEach(b=>{b.classList.toggle('active',b.dataset.storyView===storyListView);b.setAttribute('aria-pressed',String(b.dataset.storyView===storyListView))});const work=$('#workFilter').value;
+ const covers=new Set(data.assets.filter(item=>item.url).map(item=>item.id));
+ const shared=safeUrl(data.site.shared_preview_url);
+ const commonAudio=shared&&!isPrivateAudio(shared);
+ const list=allStories().filter(s=>{
+  if(work==='cover')return !covers.has(s.cover_id);
+  if(work==='audio')return !commonAudio&&(!safeUrl(s.audio_preview_url)||isPrivateAudio(s.audio_preview_url));
+  if(work==='text')return !s.excerpt?.trim()||!s.preview_text?.trim();
+  return true;
+ }).filter(s=>(status==='all'||status===s.status)&&normalizeSearch([s.title,s.category,s.series_title,...(s.tags||[])].join(' ')).includes(q)).sort((a,b)=>Number(a.sort_order??100)-Number(b.sort_order??100));queueIds=list.map(s=>s.id);updateQueueControls();$('#editorMatchCount').textContent=list.length+' / '+allStories().length+' өгүүллэг';$('#clearStoryFilters').hidden=!q&&status==='all'&&work==='all';root.innerHTML=list.map(s=>{const image=asset(s.cover_id)?.url||'';return `<div class="story-row" draggable="true" data-story-id="${esc(s.id)}"><button class="list-button ${editing?.id===s.id?'active':''}" data-edit="${esc(s.id)}">${storyListView==='cards'&&image?`<img class="story-list-cover" src="${esc(optimizedImage(image,360))}" alt="" loading="lazy">`:''}<span class="story-list-copy"><strong><span class="story-grip" aria-hidden="true">⠿</span>${esc(s.title)}</strong><small>${esc(s.category||'Ангилалгүй')} · <span class="status ${esc(s.status)}">${statusNames[s.status]||esc(s.status)}</span></small></span></button><div class="story-order-buttons"><button type="button" data-order-story="${esc(s.id)}" data-direction="up" aria-label="${esc(s.title)} дээш эрэмбэлэх">↑</button><button type="button" data-order-story="${esc(s.id)}" data-direction="down" aria-label="${esc(s.title)} доош эрэмбэлэх">↓</button></div></div>`}).join('')||'<div class="empty">Өгүүллэг олдсонгүй.</div>'}
+$('#clearStoryFilters').onclick=()=>{$('#storyListSearch').value='';$('#storyListStatus').value='all';$('#workFilter').value='all';renderList();$('#storyListSearch').focus()};
 $$('[data-story-view]').forEach(button=>button.addEventListener('click',()=>{storyListView=button.dataset.storyView;try{localStorage.setItem('adult_story_list_view',storyListView)}catch{}renderList()}));
 function showAudioState(message=''){$('#storyDuration').textContent=audioState.seconds?`${clockDuration(audioState.seconds)} · ${Math.ceil(audioState.seconds/60)} мин`:audioState.status==='loading'?'Уншиж байна…':'Аудио оруулаагүй';$('#audioMeasureStatus').textContent=message||(audioState.seconds?'Бүтэн аудионы бодит хугацаа · автоматаар':'URL оруулсны дараа автоматаар шалгана.');$('#measureAudio').disabled=audioState.status==='loading'}
 function resetAudio(url='',seconds=0){clearTimeout(audioProbeTimer);audioToken++;seconds=url?(Number(seconds)||0):0;audioState={url,seconds,status:seconds?'ready':'empty',promise:null};showAudioState()}
@@ -135,15 +276,22 @@ async function pollAudioCrop(jobInfo,storyId){
  }catch(error){segmentStatus.textContent=cropError(error.message);cropPollTimer=setTimeout(()=>pollAudioCrop(job,storyId),5000)}
 }
 function resumeAudioCrop(storyId){clearTimeout(cropPollTimer);cropPollTimer=null;const job=decodeCropJob(localStorage.getItem('adult_audio_crop_'+storyId));if(job)pollAudioCrop(job,storyId)}
-$('#createAudioPreview').addEventListener('click',async()=>{const button=$('#createAudioPreview'),start=parseClockTime($('#storyPreviewStart').value),end=parseClockTime($('#storyPreviewEnd').value);try{if(!online)throw Error('Preview боловсруулахын тулд Netlify болон Supabase онлайн горим хэрэгтэй.');if(!Number.isFinite(start)||!Number.isFinite(end)||end-start<5||end-start>180)throw Error('Preview эхлэл, төгсгөлийг 0:00 / 6:30 хэлбэрээр оруулж, 5 секундээс 3 минут сонгоно уу.');if(storyDirty){button.disabled=true;segmentStatus.textContent='Эхлээд өгүүллэгийн өөрчлөлтийг хадгалж байна…';await saveStoryAction();if(storyDirty)throw Error('Эхлээд өгүүллэгээ хадгалах шаардлагатай.')};if(!editing?.id)throw Error('Өгүүллэгээ нэг удаа хадгалаад preview бэлтгэнэ үү.');const reference=safeUrl($('#storyAudioFull').value.trim());if(!reference)throw Error('Бүтэн аудио URL оруулна уу.');button.disabled=true;segmentStatus.textContent='Тайрсан preview бэлтгэж байна…';const result=await mediaRequest({action:'audio-crop-start',story_id:editing.id,reference,start_seconds:start,end_seconds:end,cta_url:safeUrl($('#storyCtaAudio').value.trim()),cta_gap_seconds:Number($('#storyCtaGap').value)});cropJobId=result.job.id;const jobInfo={id:cropJobId,configuration:currentCropConfiguration()};localStorage.setItem('adult_audio_crop_'+editing.id,JSON.stringify(jobInfo));pollAudioCrop(jobInfo,editing.id)}catch(error){segmentStatus.textContent=cropError(error.message)}finally{button.disabled=false}});
-function newStory({force=false}={}){if(!force&&storyDirty&&!confirm('Хадгалаагүй өөрчлөлтийг орхиод шинэ өгүүллэг нээх үү?'))return;editToken++;editing=null;bodyData={full_text:'',full_audio_url:''};bodyReady=true;for(const id of ['storyTitle','storySeriesTitleInput','storySeriesOrderInput','storyExcerpt','storyPreview','storyFull','storyTags','storyAudioPreview','storyCtaAudio','storyAudioFull','storyIndexReads','storyIndexReadsCustom','storyIndexListens'])$('#'+id).value='';$('#storyIndexReadsCustom').hidden=true;$('#storyPreviewStart').value='0:00';$('#storyPreviewEnd').value='1:00';$('#storyCtaGap').value='1.5';$('#audioPreviewReady').textContent='';segmentStatus.textContent='Бүтэн аудио оруулсны дараа энд сонсож IN/OUT цэгээ сонгоно.';playSelectedRange=false;sourcePlayer.pause();sourcePlayer.removeAttribute('src');sourcePlayer.hidden=true;$('#storyFull').disabled=false;$('#storyAudioFull').disabled=false;$('#storyPrice').value=9900;$('#storyOrder').value=allStories().length+1;$('#storyStatus').value='draft';fillCategories();fillAssetSelect($('#storyCover'));$('#storyAudioArtSearch').value='';fillAudioArtPicker();resetAudio();controlsSet('story',overlayDefault());storyOverlay.audio_player=audioArtDefault();drawAudioArtwork();syncCtaAudio();storyDirty=false;$('#saveStory').disabled=false;updateStoryMeta();renderList();setEditorTab('content');drafts.inspect()}
+$('#createAudioPreview').addEventListener('click',async()=>{const button=$('#createAudioPreview'),start=parseClockTime($('#storyPreviewStart').value),end=parseClockTime($('#storyPreviewEnd').value);try{if(!online)throw Error('Preview боловсруулахын тулд Netlify болон Supabase онлайн горим хэрэгтэй.');if(!Number.isFinite(start)||!Number.isFinite(end)||end-start<5||end-start>180)throw Error('Preview эхлэл, төгсгөлийг 0:00 / 6:30 хэлбэрээр оруулж, 5 секундээс 3 минут сонгоно уу.');if(storyDirty){button.disabled=true;segmentStatus.textContent='Эхлээд өгүүллэгийн өөрчлөлтийг хадгалж байна…';await saveStoryAction();if(storyDirty)throw Error('Эхлээд өгүүллэгээ хадгалах шаардлагатай.')};if(!editing?.id)throw Error('Өгүүллэгээ нэг удаа хадгалаад preview бэлтгэнэ үү.');const reference=safeUrl($('#storyAudioFull').value.trim());if(!reference)throw Error('Бүтэн аудио URL оруулна уу.');button.disabled=true;segmentStatus.textContent='Тайрсан preview бэлтгэж байна…';const result=await mediaRequest({action:'audio-crop-start',story_id:editing.id,reference,start_seconds:start,end_seconds:end,cta_url:effectiveCta(),cta_gap_seconds:Number($('#storyCtaGap').value)});cropJobId=result.job.id;const jobInfo={id:cropJobId,configuration:currentCropConfiguration()};localStorage.setItem('adult_audio_crop_'+editing.id,JSON.stringify(jobInfo));pollAudioCrop(jobInfo,editing.id)}catch(error){segmentStatus.textContent=cropError(error.message)}finally{button.disabled=false}});
+function newStory({force=false}={}){if(!force&&storyDirty&&!confirm('Хадгалаагүй өөрчлөлтийг орхиод шинэ өгүүллэг нээх үү?'))return;clearStoryIssue();$('#editorCopyStatus').textContent='';$('#bodyLoadIssue').hidden=true;editToken++;editing=null;bodyData={full_text:'',full_audio_url:''};bodyReady=true;for(const id of ['storyTitle','storySeriesTitleInput','storySeriesOrderInput','storyExcerpt','storyPreview','storyFull','storyTags','storyAudioPreview','storyCtaAudio','storyAudioFull','storyIndexReads','storyIndexReadsCustom','storyIndexListens'])$('#'+id).value='';$('#storyIndexReadsCustom').hidden=true;$('#storyPreviewStart').value='0:00';$('#storyPreviewEnd').value='1:00';$('#storyCtaGap').value='1.5';$('#audioPreviewReady').textContent='';segmentStatus.textContent='Бүтэн аудио оруулсны дараа энд сонсож IN/OUT цэгээ сонгоно.';playSelectedRange=false;sourcePlayer.pause();sourcePlayer.removeAttribute('src');sourcePlayer.hidden=true;$('#storyFull').disabled=false;$('#storyAudioFull').disabled=false;$('#storyPrice').value=9900;$('#storyOrder').value=allStories().length+1;$('#storyStatus').value='draft';fillCategories();fillAssetSelect($('#storyCover'));$('#storyAudioArtSearch').value='';fillAudioArtPicker();resetAudio();controlsSet('story',overlayDefault());storyOverlay.audio_player=audioArtDefault();drawAudioArtwork();syncCtaAudio();storyDirty=false;$('#saveStory').disabled=false;updateStoryMeta();renderList();setEditorTab('content');drafts.inspect()}
 async function editStory(id,{force=false}={}){
+ if(!force&&editing?.id===id)return;
  if(!force&&storyDirty&&!confirm('Хадгалаагүй өөрчлөлтийг орхиод өгүүллэг солих уу?'))return;
+ clearStoryIssue();$('#editorCopyStatus').textContent='';$('#bodyLoadIssue').hidden=true;
  const s=allStories().find(x=>x.id===id);if(!s)return;const token=++editToken;editing=structuredClone(s);bodyReady=false;bodyData={full_text:'',full_audio_url:''};
  for(const [key,value] of Object.entries({storyTitle:s.title,storySeriesTitleInput:s.series_title||'',storySeriesOrderInput:s.series_order??'',storyExcerpt:s.excerpt,storyPreview:s.preview_text,storyPrice:s.price,storyOrder:s.sort_order,storyStatus:s.status,storyTags:(s.tags||[]).join(', '),storyAudioPreview:s.audio_preview_url||'',storyCtaAudio:s.overlay?.audio_cta_url||'',storyIndexReads:activityTier(s.overlay?.index_reads_override),storyIndexListens:activityTier(s.overlay?.index_listens_override)}))$('#'+key).value=value??'';$('#storyIndexReadsCustom').value=activityTier(s.overlay?.index_reads_override)==='custom'?String(s.overlay.index_reads_override):'';$('#storyIndexReadsCustom').hidden=$('#storyIndexReads').value!=='custom';$('#storyCtaGap').value=String(s.overlay?.audio_cta_gap_seconds||1.5);$('#storyPreviewStart').value=clockDuration(Number(s.overlay?.audio_preview_start)||0);$('#storyPreviewEnd').value=clockDuration(Number(s.overlay?.audio_preview_end)||60);$('#audioPreviewReady').textContent=isPrivateAudio(s.audio_preview_url)?'Энэ preview хувийн аудио руу зааж байна. Нийтэд сонсохын тулд тусдаа тайрсан preview бэлтгэнэ үү.':s.audio_preview_url?'Одоогийн нийтэд тоглох preview':'Preview хараахан үүсгээгүй';playSelectedRange=false;sourcePlayer.pause();sourcePlayer.hidden=true;
  $('#storyFull').value='';$('#storyAudioFull').value='';$('#storyFull').disabled=true;$('#storyAudioFull').disabled=true;$('#saveStory').disabled=true;resetAudio();fillCategories(s.category);fillAssetSelect($('#storyCover'),s.cover_id);$('#storyAudioArtSearch').value='';controlsSet('story',s.overlay||overlayDefault());syncCtaAudio();fillAudioArtPicker(storyOverlay.audio_player?.asset_id||'');drawAudioArtwork();storyDirty=false;updateStoryMeta();renderList();working('Хувийн агуулгыг ачаалж байна…');queuePreviews();
- try{const body=await getBody(id);if(token!==editToken)return;bodyData=body;$('#storyFull').value=body.full_text||'';$('#storyAudioFull').value=body.full_audio_url||'';bodyReady=true;$('#storyFull').disabled=false;$('#storyAudioFull').disabled=false;$('#saveStory').disabled=false;resetAudio(safeUrl(body.full_audio_url),audioSeconds(s));syncCtaAudio();working('Бэлэн');drafts.inspect();if(body.full_audio_url){syncAudioSource(body.full_audio_url);if(!audioSeconds(s))probeFullAudio()}resumeAudioCrop(id)}
- catch(e){if(token!==editToken)return;working('Хувийн агуулга уншигдсангүй');toast('Хувийн текст ачаалсангүй. Өгүүллэгээ дахин сонгож ачаална уу. '+e.message,true)}
+ await loadStoryBody(s,token);
+}
+$('#retryStoryBody').onclick=()=>{if(editing&&!bodyReady)loadStoryBody(editing,editToken)};
+async function loadStoryBody(s,token){
+ const id=s.id;$('#retryStoryBody').disabled=true;
+ try{const body=await getBody(id);if(token!==editToken)return;bodyData=body;$('#storyFull').value=body.full_text||'';$('#storyAudioFull').value=body.full_audio_url||'';bodyReady=true;$('#storyFull').disabled=false;$('#storyAudioFull').disabled=false;$('#saveStory').disabled=false;resetAudio(safeUrl(body.full_audio_url),audioSeconds(s));syncCtaAudio();$('#bodyLoadIssue').hidden=true;updateQueueControls();updateWritingTools();working(storyDirty?'Хадгалаагүй өөрчлөлт':'Бэлэн');drafts.inspect();if(storyDirty)drafts.schedule();if(body.full_audio_url){syncAudioSource(body.full_audio_url);if(!audioSeconds(s))probeFullAudio()}resumeAudioCrop(id)}
+ catch(e){if(token!==editToken)return;working('Хувийн агуулга уншигдсангүй');$('#bodyLoadIssue').hidden=false;$('#retryStoryBody').disabled=false}
 }
 function formStory(validate=true){
  const title=$('#storyTitle').value.trim();if(validate&&(!title||!$('#storyExcerpt').value.trim()||!$('#storyPreview').value.trim()))throw Error('Гарчиг, товч танилцуулга, preview текстээ бөглөнө үү.');
@@ -154,18 +302,38 @@ function formStory(validate=true){
 }
 async function reload({reset=false}={}){
  working('Контент уншиж байна…');const first=!data,storyCover=$('#storyCover').value,homeImage=$('#homeImage').value,category=$('#storyCategory').value;
- data=await getData({admin:true});data.site=cloudSettings(data.site,CONFIG);if(data.site.cloudinary_name)CONFIG.cloudName=data.site.cloudinary_name;if(data.site.upload_preset)CONFIG.unsignedUploadPreset=data.site.upload_preset;
+ data=await getData({admin:true});data.site=cloudSettings(data.site,CONFIG);renderSharedAudio();if(data.site.cloudinary_name)CONFIG.cloudName=data.site.cloudinary_name;if(data.site.upload_preset)CONFIG.unsignedUploadPreset=data.site.upload_preset;
  if(first||reset){fillHome();fillSettings();fillDesign();homeDirty=false;settingsDirty=false}else{fillAssetSelect($('#homeImage'),homeImage);const featured=$('#homeFeatured').value;$('#homeFeatured').innerHTML='<option value="">Автоматаар сонгох</option>'+allStories().map(st=>`<option value="${esc(st.id)}">${esc(st.title)}</option>`).join('');$('#homeFeatured').value=featured;imagePreview('home')}
  fillAssetSelect($('#storyCover'),storyCover);fillAudioArtPicker(storyOverlay.audio_player?.asset_id||'');drawAudioArtwork();fillCategories(category);imagePreview('story');dashboard();renderList();renderMedia();working('Синхрончилсон');queuePreviews();
 }
-async function saveStoryAction(){
+async function saveStoryAction({following=[]}={}){
  if(storySaving)return;if(mediaWorkspace?.pendingForStory())return toast('Энэ өгүүллэгийн зураг оруулж дуусахыг хүлээгээд хадгална уу.',true);storySaving=true;$('#savingNotice').hidden=false;$('#appRoot').inert=true;$('#appRoot').setAttribute('aria-busy','true');working('Хадгалж байна…');
  const savedEditToken=editToken;
- try{if(!bodyReady)throw Error('Хувийн агуулга бүрэн ачаалагдаагүй байна. Өгүүллэгээ дахин сонгоно уу.');formStory();$('#saveStory').disabled=true;working('Хадгалж байна…');
+ let invalidField;
+ clearStoryIssue();
+ try{if(!bodyReady)throw Error('Хувийн агуулга бүрэн ачаалагдаагүй байна. Өгүүллэгээ дахин сонгоно уу.');
+ for(const id of ['storyTitle','storyExcerpt','storyPreview']){
+  const field=$('#'+id);
+  if(!field.value.trim()){
+   invalidField=field;field.setAttribute('aria-invalid','true');setEditorTab('content');
+   throw Error('«'+document.querySelector('label[for="'+id+'"]').textContent.replace(' *','')+'» талбарыг бөглөнө үү.');
+  }
+ }
+ formStory();$('#saveStory').disabled=true;working('Хадгалж байна…');
  const fullRaw=$('#storyAudioFull').value.trim(),previewRaw=$('#storyAudioPreview').value.trim(),ctaRaw=$('#storyCtaAudio').value.trim();if(fullRaw&&!safeUrl(fullRaw))throw Error('Бүтэн аудио URL буруу байна.');if(previewRaw&&!safeUrl(previewRaw))throw Error('Preview аудио URL буруу байна.');if(ctaRaw&&!safeUrl(ctaRaw))throw Error('CTA URL буруу байна.');
  const measured=await probeFullAudio();if(savedEditToken!==editToken)throw Error('Өгүүллэг солигдсон тул хадгалалтыг зогсоолоо.');if(fullRaw&&!measured&&$('#storyStatus').value==='published')throw Error('Нийтлэхээс өмнө бүтэн аудионы хугацааг уншуулах шаардлагатай. URL-аа шалгах эсвэл ноорог хадгална уу.');
- const draftKey=editing?.id||'new';const saved=await saveStory(formStory(),{full_text:$('#storyFull').value,full_audio_url:safeUrl(fullRaw)});await drafts.clear(draftKey);storyDirty=false;await reload();await editStory(saved.id,{force:true});toast('Өгүүллэг хадгалагдлаа · '+statusNames[saved.status]);
- }catch(e){working('Хадгалж чадсангүй');toast(e.message,true)}finally{storySaving=false;$('#savingNotice').hidden=true;$('#appRoot').inert=false;$('#appRoot').removeAttribute('aria-busy');$('#saveStory').disabled=!bodyReady}
+ const draftKey=editing?.id||'new';const saved=await saveStory(formStory(),{full_text:$('#storyFull').value,full_audio_url:safeUrl(fullRaw)});editing={...saved};bodyData={story_id:saved.id,full_text:$('#storyFull').value,full_audio_url:safeUrl(fullRaw)};
+ storyDirty=false;updateStoryMeta();await drafts.clear(draftKey);
+ try{
+  await reload();
+  // After saving, the current story can drop out of the filter. Continue from its former position.
+  const remaining=new Set(queueIds);
+  const target=following.find(id=>remaining.has(id))||saved.id;
+  await editStory(target,{force:true});
+ }
+ catch{drafts.inspect();working('Өгүүллэг хадгалагдсан');toast('Өгүүллэг хадгалагдлаа. Жагсаалтыг шинэчлэхийн тулд «Шинэчлэх» товчийг дарна уу.');return}
+ toast('Өгүүллэг хадгалагдлаа · '+statusNames[saved.status]);
+ }catch(e){working('Хадгалж чадсангүй');$('#storyFormIssue').textContent=e.message;$('#storyFormIssue').hidden=false;if(!invalidField)toast(e.message,true)}finally{storySaving=false;$('#savingNotice').hidden=true;$('#appRoot').inert=false;$('#appRoot').removeAttribute('aria-busy');$('#saveStory').disabled=!bodyReady;updateQueueControls();invalidField?.focus()}
 }
 $('#storyList').addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)editStory(b.dataset.edit)});$('#newStory').addEventListener('click',()=>newStory());$('#overviewNew').addEventListener('click',()=>{setTab('stories');newStory()});$('#storyListSearch').addEventListener('input',renderList);$('#storyListStatus').addEventListener('change',renderList);
 $('#storyIndexReads').addEventListener('change',()=>{const custom=$('#storyIndexReads').value==='custom';$('#storyIndexReadsCustom').hidden=!custom;if(!custom)$('#storyIndexReadsCustom').value='';markStory()});
@@ -240,10 +408,14 @@ mediaWorkspace=createMediaWorkspace({
  reordered:ids=>{if(editing&&ids.includes(editing.id)){editing.sort_order=ids.indexOf(editing.id)+1;$('#storyOrder').value=editing.sort_order}},
  openCover:()=>{setTab('stories');setEditorTab('cover')}
 });
-mountR2({reload,toast,editorToken:()=>editToken,onAudio:reference=>{if(!bodyReady)return toast('Өгүүллэгийн агуулга ачаалж дуусахыг хүлээнэ үү.',true);$('#storyAudioFull').value=reference;resetAudio();syncAudioSource(reference);markStory();probeFullAudio(true)}});
+mountR2({reload,toast,editorToken:()=>editToken,onAudio:(reference,kind)=>{if(kind!=='full'){const field=$('#'+audioFields[kind]);field.value=reference;field.dispatchEvent(new Event('input',{bubbles:true}));markStory();return}if(!bodyReady)return toast('Өгүүллэгийн агуулга ачаалж дуусахыг хүлээнэ үү.',true);$('#storyAudioFull').value=reference;resetAudio();syncAudioSource(reference);markStory();probeFullAudio(true)}});
 window.addEventListener('keydown',event=>{
+ if(active==='stories'&&(event.ctrlKey||event.metaKey)&&event.key==='Enter'&&!event.isComposing&&!event.repeat){
+  if(document.querySelector('dialog[open]')||$('#appRoot').classList.contains('hidden'))return;
+  event.preventDefault();advanceQueue();return;
+ }
  if(storySaving){if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s')event.preventDefault();return}
- if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();if(document.querySelector('dialog[open]'))return;const button={stories:'saveStory',homepage:'saveHomepage',design:'saveDesign',settings:'saveSettings'}[active];if(button)$('#'+button).click();else toast('Хадгалах өөрчлөлт энэ хэсэгт алга.');}
+ if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();if(writingDialog.open)closeWriting();else if(document.querySelector('dialog[open]'))return;const button={stories:'saveStory',homepage:'saveHomepage',design:'saveDesign',settings:'saveSettings'}[active];if(button)$('#'+button).click();else toast('Хадгалах өөрчлөлт энэ хэсэгт алга.');}
  if(event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.target.closest('input,textarea,select,[contenteditable=true]')){const search=active==='media'?$('#mediaSearch'):active==='stories'?$('#storyListSearch'):null;if(search){event.preventDefault();search.focus()}}
  if(event.key==='Escape'){$('#lightbox').classList.add('hidden');$('#assetEditModal').classList.add('hidden')}
 });

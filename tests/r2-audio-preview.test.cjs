@@ -17,3 +17,21 @@ test('trimmed public preview can be signed without enabling a private audio buck
   for(const name of names){if(before[name]===undefined)delete process.env[name];else process.env[name]=before[name]}
  }
 });
+
+test('preview picker lists only public audio and keeps the private library separate',async t=>{
+ const sdk=require('@aws-sdk/client-s3');
+ const names={R2_ACCOUNT_ID:'a'.repeat(32),R2_ENDPOINT:'https://'+'a'.repeat(32)+'.r2.cloudflarestorage.com',R2_MEDIA_BUCKET:'public-media',R2_AUDIO_BUCKET:'private-audio',R2_PUBLIC_BASE_URL:'https://media.example.com',R2_ACCESS_KEY_ID:'test',R2_SECRET_ACCESS_KEY:'test'};
+ const before={...process.env};Object.assign(process.env,names);
+ t.after(()=>{for(const k of Object.keys(names)){if(before[k]===undefined)delete process.env[k];else process.env[k]=before[k]}});
+ const calls=[];
+ t.mock.method(sdk.S3Client.prototype,'send',async command=>{
+  calls.push(command.input);
+  return {Contents:[{Key:'folder/санал 1.mp3',Size:1024},{Key:'photo.jpg'},{Key:'../bad.mp3'}],IsTruncated:true,NextContinuationToken:'next'};
+ });
+ const page=await r2.list({publicAudio:true,cursor:'cursor'});
+ assert.equal(calls[0].Bucket,'public-media');assert.equal(calls[0].ContinuationToken,'cursor');
+ assert.equal(page.next_cursor,'next');assert.equal(page.items.length,1);
+ assert.equal(page.items[0].reference,'https://media.example.com/folder/'+encodeURIComponent('санал 1.mp3'));
+ const full=await r2.list({audio:true});assert.equal(calls[1].Bucket,'private-audio');
+ assert.ok(full.items[0].reference.startsWith(names.R2_ENDPOINT+'/private-audio/'));
+});

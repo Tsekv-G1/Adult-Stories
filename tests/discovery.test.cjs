@@ -12,9 +12,10 @@ test('discovery state round-trips without losing local mode or reader links',asy
  const state={search:'Шөнийн түүх',filter:'Нууцлаг',sort:'newest',shortOnly:true};
  const url=discoveryUrl('https://example.com/?local=1#story-abc',state);
  assert.deepEqual(readDiscovery(url),state);assert.equal(new URL(url).searchParams.get('local'),'1');assert.equal(new URL(url).hash,'#story-abc');
- const cleared=new URL(discoveryUrl(url,{search:'',filter:'Бүгд',sort:'popular',shortOnly:false}));
+ const cleared=new URL(discoveryUrl(url,{search:'',filter:'Бүгд',sort:'editor',shortOnly:false}));
+ assert.equal(readDiscovery(discoveryUrl(url,{...state,sort:'popular'})).sort,'popular');
  assert.equal(cleared.search,'?local=1');assert.equal(cleared.hash,'#story-abc');
- assert.equal(readDiscovery('https://example.com/?sort=invalid').sort,'popular');
+ assert.equal(readDiscovery('https://example.com/?sort=invalid').sort,'editor');
 });
 test('reader font size recovers from corrupted preferences and stays in range',async()=>{
  const {readerFontSize}=await import('../public/discovery.js');

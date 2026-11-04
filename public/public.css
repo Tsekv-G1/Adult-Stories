@@ -296,3 +296,21 @@ html:has(.public-site){scroll-padding-top:105px}
 .bank-memo>span{font-size:.75rem;letter-spacing:.05em;font-weight:800;color:#ff789a}
 .bank-memo .bank-copy{font-size:1.1rem;max-width:100%;word-break:break-word}
 .checkout-memo-note{font-size:.88rem;line-height:1.6;color:var(--muted,#c8bfc6);margin:10px 0 14px}
+
+.connection-notice{padding:12px 20px;text-align:center;background:#332014;color:#ffe1ad;border-bottom:1px solid #714828;font-size:13px;line-height:1.6}.connection-notice[hidden]{display:none}
+
+/* Discovery and saved-library actions remain usable on narrow screens. */
+.public-site .reset-filters{min-height:44px;margin:4px 0 12px;color:#f3a7bc}
+.public-site .reset-filters[hidden]{display:none}
+.public-site .modal-box{max-height:85dvh;overflow-y:auto}
+.saved-library-row{display:flex;align-items:center;gap:8px}
+.saved-library-row .saved-story{flex:1;min-width:0}
+.saved-library-row .saved-story>span:first-child{display:grid;gap:5px;min-width:0}
+.saved-library-row strong{overflow-wrap:anywhere}
+.saved-library-row small{font-size:12px;color:#c7b2c0;font-weight:400}
+.saved-library-remove{flex:none;min-height:44px;padding:8px 12px;border:1px solid #51313e;border-radius:9px;background:transparent;color:#f1b3c5;font:inherit;font-size:12px}
+.feedback-toast{position:fixed;z-index:1000002;bottom:max(140px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;width:max-content;max-width:calc(100vw - 28px);padding:12px 16px;border:1px solid #895269;border-radius:12px;background:#281922;color:#fff;box-shadow:0 10px 40px #0008;font-size:14px}
+.feedback-toast[hidden],.feedback-toast button[hidden]{display:none}
+.feedback-toast button{min-width:44px;min-height:44px;padding:6px 10px;border:1px solid #875168;border-radius:8px;background:#4c2134;color:#fff;font:inherit;cursor:pointer}
+.public-site :is(button,a,input,select):focus-visible{outline:2px solid #ff759d;outline-offset:3px}
+@media(max-width:480px){.saved-library-row{gap:6px}.saved-library-remove{padding-inline:8px}.feedback-toast{bottom:max(165px,env(safe-area-inset-bottom));gap:8px;padding:8px 12px;font-size:12px}}

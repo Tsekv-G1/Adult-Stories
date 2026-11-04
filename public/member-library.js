@@ -7,7 +7,7 @@ export function createLibrary({onChange=()=>{},onStatus=()=>{}}={}){
  const snapshot=()=>Object.values(rows).sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||'')));
  function emit(){onChange(snapshot())}
  async function flush(){
-  if(!user||busy)return;busy=true;const token=epoch,id=user.id;
+  if(!user||busy)return;busy=true;const token=epoch;let succeeded=false;
   try{for(const storyId of Object.keys(pending)){
    if(token!==epoch)break;const patch={...pending[storyId]};let result;
    for(let retry=0;retry<3;retry++){
@@ -17,9 +17,9 @@ export function createLibrary({onChange=()=>{},onStatus=()=>{}}={}){
    if(result.conflict)throw Error('conflict');
    const remaining=pending[storyId]||{};for(const field of Object.keys(patch))if(remaining[field]===patch[field])delete remaining[field];
    if(!Object.keys(remaining).length)delete pending[storyId];rows[storyId]={...result.row,...remaining};persist();
-  }if(token===epoch){onStatus(Object.keys(pending).length?'Синк хийж байна…':'Сан синхрончилсон');emit()}}
+  }if(token===epoch){succeeded=true;onStatus(Object.keys(pending).length?'Синк хийж байна…':'Сан синхрончилсон');emit()}}
   catch(error){if(token===epoch)onStatus(error.status===401?'Синк хийхийн тулд дахин нэвтэрнэ үү.':'Төхөөрөмжид хадгалсан · Холбогдоход синк хийнэ.')}
-  finally{busy=false;if(token!==epoch&&user)flush()}
+  finally{busy=false;if(token!==epoch&&user)flush();else if(succeeded&&user&&Object.keys(pending).length){clearTimeout(timer);timer=setTimeout(flush,900)}}
  }
  async function refresh(){if(!user)return;const token=epoch;try{const result=await memberRequest('library');if(token!==epoch)return;for(const row of result.rows)rows[row.story_id]={...row,...pending[row.story_id]};persist();emit();await flush()}catch{if(token===epoch)onStatus('Төхөөрөмжийн сан · Холбогдоход синк хийнэ.')}}
  async function setUser(next){if(initialized&&user?.id===next?.id){if(next)refresh();return}initialized=true;epoch++;user=next;rows={};pending={};try{const cached=JSON.parse(localStorage.getItem(key())||'{}');rows=cached.rows||{};pending=cached.pending||{}}catch{}emit();if(user){onStatus('Санг синк хийж байна…');await refresh()}else onStatus('Энэ төхөөрөмжид хадгална.')}

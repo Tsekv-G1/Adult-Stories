@@ -22,6 +22,9 @@ exports.handler=c.endpoint(['POST'],async e=>{
   if(b.action==='media-complete')return c.reply(200,{ok:true,asset:await r2.complete(b)});
   return c.reply(200,{ok:true,...await r2.list({cursor:b.cursor||'',audio:b.action==='audio-list',publicAudio:b.action==='preview-list'||b.action==='cta-list',publicKind:b.action==='cta-list'?'cta':''})});
  }
+ if(b.action==='audio-cta-catalog'){const stories=await c.db('stories?select=id,title&order=id&limit='+limit+'&offset='+offset);return c.reply(200,{ok:true,stories,next_offset:stories.length===limit?offset+limit:null})}
+ if(b.action==='audio-cta-apply')return c.reply(200,{ok:true,...await require('../../server/cta-bulk.cjs').start(c.uuid(b.story_id),b.cta_url,b.cta_gap_seconds)});
+ if(b.action==='audio-preview-cleanup')return c.reply(200,{ok:true,...await require('../../server/preview-cleanup.cjs').cleanup()});
  if(b.action==='audio-crop-start'){
   const storyId=c.uuid(b.story_id),reference=String(b.reference||''),start=Number(b.start_seconds),end=Number(b.end_seconds);
   let cta;try{cta=require('../../server/audio-crop.cjs').ctaSettings(b.cta_url,b.cta_gap_seconds)}catch(error){c.fail(400,error.message)}

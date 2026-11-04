@@ -1,6 +1,6 @@
 'use strict';
 const crypto=require('node:crypto');
-const {S3Client,PutObjectCommand,HeadObjectCommand,ListObjectsV2Command,GetObjectCommand}=require('@aws-sdk/client-s3');
+const {S3Client,PutObjectCommand,HeadObjectCommand,ListObjectsV2Command,GetObjectCommand,DeleteObjectCommand}=require('@aws-sdk/client-s3');
 const {getSignedUrl}=require('@aws-sdk/s3-request-presigner');
 const c=require('./core.cjs');
 const IMAGE_TYPES={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/avif':'avif'};
@@ -63,4 +63,11 @@ async function audioPreviewTarget(storyId){
  const key=`audio-preview/${storyId}/${crypto.randomUUID()}.mp3`;
  try{return{put_url:await getSignedUrl(client(),new PutObjectCommand({Bucket:s.bucket,Key:key,ContentType:'audio/mpeg'}),{expiresIn:3600}),url:publicUrl(key)}}catch(e){if(e instanceof c.ApiError)throw e;c.fail(503,'r2_upload_unavailable')}
 }
-module.exports={settings,client,upload,complete,list,publicUrl,privatePath,signedAudio,audioOutputTargets,audioPreviewTarget,validKey};
+async function deleteGeneratedPreview(raw){
+ const s=settings();let url;try{url=new URL(raw)}catch{return false}
+ if(url.origin!==s.publicBase||url.search||url.hash)return false;
+ const key=decodeURIComponent(url.pathname.slice(1));
+ if(!/^audio-preview\/[a-f\d-]{36}\/[a-f\d-]{36}\.mp3$/i.test(key))return false;
+ await client().send(new DeleteObjectCommand({Bucket:s.bucket,Key:key}));return true;
+}
+module.exports={deleteGeneratedPreview,settings,client,upload,complete,list,publicUrl,privatePath,signedAudio,audioOutputTargets,audioPreviewTarget,validKey};

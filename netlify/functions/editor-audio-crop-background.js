@@ -18,7 +18,9 @@ exports.handler=async event=>{
   const rows=await c.db('adult_audio_crop_jobs?id=eq.'+id+'&select=id,status&limit=1'),job=rows?.[0];
   if(!job||job.status!=='queued')return c.reply(200,{ok:true,ignored:true});
   await update(id,{status:'processing',error_code:''});
-  const result=await require('../../server/audio-crop.cjs').crop(input);
+  const processor=require('../../server/audio-crop.cjs');
+  const result=await (input.existing_preview?processor.appendExisting(input):processor.crop(input));
+  if(input.apply_story)await require('../../server/cta-bulk.cjs').apply(input,result);
   await update(id,{status:'ready',duration_seconds:result.duration_seconds,error_code:''});
  }catch(error){const code=String(error?.message||'audio_processor_failed');await update(id,{status:'failed',error_code:/^[a-z0-9_]{1,64}$/.test(code)?code:'audio_processor_failed'}).catch(()=>{})}
  return c.reply(200,{ok:true});

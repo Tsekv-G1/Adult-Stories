@@ -153,3 +153,59 @@ test('private M4A CTA is signed at processing time and merged into the public pr
  const result=await crop({source_url:'https://audio.example.com/source.m4a',cta_url:reference,start_seconds:1,end_seconds:7,put_url:values.R2_ENDPOINT+'/public-media/clip.mp3?X-Amz-Signature=upload'});
  assert.equal(signCount,1);assert.equal(putCount,1);assert.ok(result.duration_seconds>9&&result.duration_seconds<10);
 });
+
+test('25-second preview ends with 1.5 seconds of silence then the five-second CTA',async t=>{
+ const root=await mkdtemp(path.join(tmpdir(),'adult-25s-cta-'));
+ t.after(()=>rm(root,{recursive:true,force:true}));
+ const voice=path.join(root,'preview.mp3'),cta=path.join(root,'cta.mp3'),final=path.join(root,'final.mp3');
+ tone(voice,300,25);tone(cta,880,5);
+ const seconds=await appendCtaFile(voice,cta,final,1.5,{binary});
+ assert.ok(Math.abs(seconds-31.5)<.35,`Expected 31.5s, received ${seconds}`);
+ assert.ok(rms(final,24)>300,'Preview still plays before its end');
+ assert.ok(rms(final,25.5)<50,'The 1.5-second gap is silent');
+ assert.ok(rms(final,27)>300,'CTA plays after the silent gap');
+ assert.ok(rms(final,30)>300,'Playback includes the CTA tail, not just the 25-second preview');
+});
+
+test('saving a selected CTA requires rendering and the generated preview wins over an old shared preview',async()=>{
+ const source=readFileSync(path.resolve(__dirname,'../public/audio-preview-state.js'),'utf8');
+ const {previewNeedsRender,resolvedPreviewUrl}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const current={reference:'https://private/full.m4a',start:0,end:25,ctaUrl:'https://private/cta.mp3',ctaGap:1.5};
+ assert.equal(previewNeedsRender({preview:'https://public/old.mp3',current,rendered:{}}),true);
+ assert.equal(previewNeedsRender({preview:'',current,rendered:{}}),true);
+ assert.equal(previewNeedsRender({preview:'https://public/new.mp3',current,rendered:{...current,previewUrl:'https://public/new.mp3'}}),false);
+ assert.equal(previewNeedsRender({preview:'',current:{...current,reference:''}}),false);
+ assert.equal(resolvedPreviewUrl({preview:'new.mp3',renderedPreview:'new.mp3',sharedPreview:'old.mp3'}),'new.mp3');
+ assert.equal(resolvedPreviewUrl({preview:'story.mp3',sharedPreview:'shared.mp3'}),'shared.mp3');
+ assert.equal(resolvedPreviewUrl({preview:'story.mp3'}),'story.mp3');
+});
+
+test('a crop response containing only the 25-second source cannot be published as CTA audio',async()=>{
+ const source=readFileSync(path.resolve(__dirname,'../public/audio-preview-state.js'),'utf8');
+ const {previewResultComplete}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const configuration={start:0,end:25,ctaUrl:'https://r2.example/cta.mp3',ctaGap:1.5};
+ assert.equal(previewResultComplete(configuration,25),false);
+ assert.equal(previewResultComplete(configuration,26.5),false);
+ assert.equal(previewResultComplete(configuration,31.5),true);
+ assert.equal(previewResultComplete(configuration,NaN),false);
+ assert.equal(previewResultComplete({...configuration,ctaUrl:''},25),true);
+});
+
+test('changing a global CTA replaces the old outro instead of appending twice',async t=>{
+ const {appendExisting}=require('../server/audio-crop.cjs');
+ const root=await mkdtemp(path.join(tmpdir(),'adult-replace-cta-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const preview=path.join(root,'preview.mp3'),oldCta=path.join(root,'old-cta.mp3'),newCta=path.join(root,'new-cta.mp3'),previous=path.join(root,'previous.mp3');
+ tone(preview,300,25);tone(oldCta,600,5);tone(newCta,1000,3);
+ await appendCtaFile(preview,oldCta,previous,1.5,{binary});
+ const source=new Uint8Array(await readFile(previous)),cta=new Uint8Array(await readFile(newCta));let uploaded;
+ const before=process.env.FFMPEG_PATH;process.env.FFMPEG_PATH=binary;t.after(()=>{if(before===undefined)delete process.env.FFMPEG_PATH;else process.env.FFMPEG_PATH=before});
+ t.mock.method(global,'fetch',async(url,options={})=>{
+  if(options.method==='PUT'){uploaded=options.body;return new Response('',{status:200})}
+  if(url==='https://pub-test.r2.dev/old-preview.mp3')return new Response(source);
+  if(url==='https://pub-test.r2.dev/new-cta.mp3')return new Response(cta);
+  throw Error('unexpected_fetch');
+ });
+ const result=await appendExisting({source_url:'https://pub-test.r2.dev/old-preview.mp3',cta_url:'https://pub-test.r2.dev/new-cta.mp3',base_seconds:25,cta_gap_seconds:1.5,put_url:'https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.r2.cloudflarestorage.com/previews/final.mp3?X-Amz-Signature=test'});
+ assert.ok(Math.abs(result.duration_seconds-29.5)<.4,`Expected 25+1.5+3, got ${result.duration_seconds}`);
+ const final=path.join(root,'final.mp3');await writeFile(final,uploaded);assert.ok(rms(final,25.6)<50);assert.ok(rms(final,27)>300);
+});

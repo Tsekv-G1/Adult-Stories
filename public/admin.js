@@ -1,6 +1,7 @@
+import {createBulkCta,cleanOldPreviews} from './bulk-cta.js';
 import {normalizeSearch} from './discovery.js';
 import {mountR2} from './r2-media.js?v=8.21.0';
-import {cropConfiguration,cropConfigurationMatches,decodeCropJob,audioPreviewIsStale} from './audio-preview-state.js?v=8.23.0';
+import {cropConfiguration,cropConfigurationMatches,decodeCropJob,audioPreviewIsStale,previewNeedsRender,previewResultComplete} from './audio-preview-state.js?v=8.23.0';
 import {optimizedImage} from './image-delivery.js?v=8.5.0';
 import {originalImageUrl} from './image-upscale.js?v=8.5.0';
 import {createDrafts} from './editor-drafts.js?v=8.5.0';
@@ -23,7 +24,7 @@ function renderSharedAudio(){
  for(const kind of Object.keys(audioFields)){
   const url=data?.site['shared_'+kind+'_url'];
   const status=$('#shared-'+kind);
-  const tip=kind==='preview'?'Бүх өгүүллэгт энэ preview тоглоно':'Шинээр бэлтгэх бүх preview-д энэ CTA залгагдана';
+  const tip=kind==='preview'?'Бүх өгүүллэгт энэ preview тоглоно':'Бүх өгүүллэгийн preview-д хэрэглэх CTA';
   status.textContent=url?tip+' · '+url.split('/').pop():'';
   $('[data-unshare-audio="'+kind+'"]').hidden=!url;
  }
@@ -44,23 +45,36 @@ for(const button of $$('[data-share-audio],[data-unshare-audio]')){
      throw Error('Нийтийн R2 сангаас тусдаа аудио сонгоно уу.');
    }
    savingShared=true;button.disabled=true;
+   if(kind==='cta'&&value&&storyDirty){await saveStoryAction({renderPreview:false});if(storyDirty)throw Error('Өгүүллэгийн өөрчлөлт хадгалагдаагүй байна.')} 
    const saved=await saveSite({[key]:value},{sharedKey:key});
    data.site={...data.site,[key]:saved[key]};renderSharedAudio();syncCtaAudio();queuePreviews();
+   if(kind==='cta'&&value){await bulkCta.apply({items:allStories(),ctaUrl:value,gap:Number($('#storyCtaGap').value)});return}
    toast(value?'Бүх өгүүллэгийн тохиргоог хадгаллаа.':'Өгүүллэг тус бүрийн аудио тохиргоог сэргээв.');
   }catch(error){toast(error.message,true)}finally{savingShared=false;button.disabled=false}
  });
 }
+const bulkCta=createBulkCta({status:$('#bulkCtaStatus'),onDone:async()=>{await reload();if(editing&&!storyDirty)await editStory(editing.id,{force:true})}});
+$('#resumeBulkCta').addEventListener('click',()=>bulkCta.resume());
+$('#cleanupPreviews').addEventListener('click',async event=>{const button=event.currentTarget;button.disabled=true;try{const result=await cleanOldPreviews(count=>{button.textContent=`Цэвэрлэж байна · ${count} файл`});toast(result.deferred?'Аудио боловсруулж байна. Дууссаны дараа цэвэрлэнэ.':`Ашиглагдахгүй хуучин ${result.deleted} preview файл цэвэрлэлээ.`)}catch(error){toast(error.message,true)}finally{button.disabled=false;button.textContent='Хуучин preview цэвэрлэх'}});
 function currentCropConfiguration(){return cropConfiguration({reference:safeUrl($('#storyAudioFull').value.trim()),start:parseClockTime($('#storyPreviewStart').value),end:parseClockTime($('#storyPreviewEnd').value),ctaUrl:effectiveCta(),ctaGap:Number($('#storyCtaGap').value)})}
+function previewRenderState(){
+ return {preview:safeUrl($('#storyAudioPreview').value.trim()),current:currentCropConfiguration(),rendered:{ctaUrl:storyOverlay.audio_cta_rendered_url||'',ctaGap:storyOverlay.audio_cta_rendered_gap||1.5,previewUrl:storyOverlay.audio_preview_rendered_url||'',start:storyOverlay.audio_preview_rendered_start,end:storyOverlay.audio_preview_rendered_end,reference:storyOverlay.audio_preview_rendered_source||''}};
+}
+function needsAudioRender(){return previewNeedsRender(previewRenderState())}
 let ctaListenToken=0;
 function syncCtaAudio(){
  const cta=$('#ctaAudioPlayer'),final=$('#audioCombinedPreview'),status=$('#ctaAudioStatus'),url=effectiveCta(),preview=safeUrl($('#storyAudioPreview').value.trim());
  const listenToken=++ctaListenToken;cta.pause();cta.removeAttribute('src');cta.hidden=true;
  if(url)audioPreview(url).then(source=>{if(listenToken!==ctaListenToken)return;cta.src=source;cta.load();cta.hidden=false}).catch(()=>{if(listenToken===ctaListenToken)toast('CTA аудиог сонсож чадсангүй. R2 холболтоо шалгаад дахин сонгоно уу.',true)});
  if(preview&&!isPrivateAudio(preview)){if(final.getAttribute('src')!==preview){final.src=preview;final.load()}final.hidden=false}else{final.pause();final.removeAttribute('src');final.hidden=true}
- const previous=storyOverlay.audio_cta_rendered_url||'',stale=audioPreviewIsStale({preview,current:currentCropConfiguration(),rendered:{ctaUrl:previous,ctaGap:storyOverlay.audio_cta_rendered_gap||1.5,previewUrl:storyOverlay.audio_preview_rendered_url||'',start:storyOverlay.audio_preview_rendered_start,end:storyOverlay.audio_preview_rendered_end,reference:storyOverlay.audio_preview_rendered_source||''}});
- status.textContent=data?.site.shared_preview_url?'Сайт дээр бүх өгүүллэгийн нийтлэг preview тоглож байна. Доорх тоглуулагчаар тухайн өгүүллэгийн файлыг шалгана уу.':!preview?(url?'CTA URL бэлэн. IN/OUT хэсгээ сонгоод preview-г бэлтгэнэ үү.':'CTA оруулбал preview бэлтгэх үед нэг MP3-д залгана.'):
- stale?'Анхаар: аудио эсвэл CTA тохиргоо өөрчлөгдсөн. Сайтад хуучин preview тоглож байгаа тул «PREVIEW БЭЛДЭХ» товчийг дахин дарна уу.':
+ const stale=audioPreviewIsStale(previewRenderState());
+ $('#combinedPreviewLabel').textContent=stale?'Өмнөх preview · шинэ CTA хараахан нэгтгэгдээгүй':'Бэлэн preview · CTA-тайгаа нэг аудио';
+ $('#renderCtaPreview').textContent=cropJobId?'Preview боловсруулж байна…':stale?'CTA-тай preview шинэчлэх':'CTA-тай preview бэлтгэх';
+ $('#renderCtaPreview').disabled=!!cropJobId;
+ status.textContent=data?.site.shared_preview_url&&storyOverlay.audio_preview_rendered_url!==preview?'Сайт дээр бүх өгүүллэгийн нийтлэг preview тоглож байна. Доорх тоглуулагчаар тухайн өгүүллэгийн файлыг шалгана уу.':!preview?(url?'CTA URL бэлэн. IN/OUT хэсгээ сонгоод preview-г бэлтгэнэ үү.':'CTA оруулбал preview бэлтгэх үед нэг MP3-д залгана.'):
+ stale?'CTA хараахан энэ preview-д ороогүй байна. «CTA-тай preview шинэчлэх» эсвэл «Хадгалах» дарвал шинэ файлыг боловсруулж, сайтад автоматаар хадгална.':
  url?'CTA бэлэн MP3 дотор нэгтгэгдсэн.':'Бэлэн preview нэг MP3 файл байна.';
+ if(data?.site.shared_preview_url&&storyOverlay.audio_preview_rendered_url===preview)status.textContent+=' Энэ өгүүллэгийн бэлтгэсэн preview сайт дээр тоглоно.';
 }
 for(const id of ['storyCtaAudio','storyCtaGap'])$('#'+id).addEventListener('input',syncCtaAudio);$('#storyAudioPreview').addEventListener('input',syncCtaAudio);
 let bodyData={full_text:'',full_audio_url:''};
@@ -246,7 +260,7 @@ $('#playAudioSegment').addEventListener('click',async()=>{try{if(!sourcePlayer.s
 function setAudioMark(id){if(!sourcePlayer.src||!Number.isFinite(sourcePlayer.currentTime))return toast('Бүтэн аудиогоо нээгээд тэмдэглэх цэгт аваачна уу.',true);const value=Math.floor(sourcePlayer.currentTime);$('#'+id).value=clockDuration(value);if(id==='storyPreviewStart'&&parseClockTime($('#storyPreviewEnd').value)<=value)$('#storyPreviewEnd').value=clockDuration(Math.min(Math.floor(sourcePlayer.duration||value+60),value+60));if(id==='storyPreviewEnd'&&value<=parseClockTime($('#storyPreviewStart').value))$('#storyPreviewStart').value=clockDuration(Math.max(0,value-30));playSelectedRange=false;sourcePlayer.pause();segmentStatus.textContent=`Сонгосон хэсэг: ${$('#storyPreviewStart').value}–${$('#storyPreviewEnd').value}. · Шалгаж сонсоод батална уу.`;markStory()}
 $('#setPreviewIn').addEventListener('click',()=>setAudioMark('storyPreviewStart'));$('#setPreviewOut').addEventListener('click',()=>setAudioMark('storyPreviewEnd'));
 for(const id of ['storyPreviewStart','storyPreviewEnd'])$('#'+id).addEventListener('input',()=>{playSelectedRange=false;sourcePlayer.pause();const start=parseClockTime($('#storyPreviewStart').value),end=parseClockTime($('#storyPreviewEnd').value);if(Number.isFinite(start)&&Number.isFinite(end)){storyOverlay.audio_preview_start=start;storyOverlay.audio_preview_end=end;}segmentStatus.textContent='Сонсох хэсгийг шинэчиллээ. IN/OUT цэгээ сонсоод шалгана уу.';syncCtaAudio();markStory()});
-function cropError(code){return({save_audio_first:'Preview гаргахын өмнө өгүүллэг болон бүтэн аудионы URL-аа хадгална уу.',invalid_audio_range:'Preview 5 секундээс 3 минутын урттай байх ёстой.',invalid_audio_source:'Энэ аудио холбоосыг сервер боловсруулж чадсангүй.',invalid_cta_url:'CTA-д R2 сангийн аудио эсвэл зөвшөөрөгдсөн HTTPS холбоос сонгоно уу.',invalid_cta_gap:'CTA завсар 1–2 секунд байх ёстой.',invalid_cta_host:'CTA аудиог зөвхөн Cloudflare R2 public domain эсвэл Netlify дээр CTA_ALLOWED_HOSTS-д зөвшөөрсөн домэйнээс оруулна уу.',audio_source_unavailable:'Бүтэн аудиог уншиж чадсангүй. Файлын холбоос нээлттэй эсэхийг шалгана уу.',audio_too_large:'Аудио файлын хэмжээ зөвшөөрөгдсөн хязгаараас их байна (CTA 12 MB).' ,audio_processor_unavailable:'Netlify-ийн FFmpeg function ажиллахгүй байна. Deploy болон function log-ийг шалгана уу.',audio_processor_failed:'Preview тайрч боловсруулахад алдаа гарлаа.',audio_crop_start_failed:'Preview боловсруулах ажлыг эхлүүлж чадсангүй.',audio_crop_timeout:'Preview боловсруулах ажил хугацаа хэтэрсэн. Netlify function log-ийг шалгаж, дахин бэлтгэнэ үү.',r2_upload_failed:'Тайрсан preview-г R2-д хадгалж чадсангүй.'})[code]||code||'Preview боловсруулахад алдаа гарлаа.'}
+function cropError(code){return({save_audio_first:'Preview гаргахын өмнө өгүүллэг болон бүтэн аудионы URL-аа хадгална уу.',invalid_audio_range:'Preview 5 секундээс 3 минутын урттай байх ёстой.',invalid_audio_source:'Энэ аудио холбоосыг сервер боловсруулж чадсангүй.',invalid_cta_url:'CTA-д R2 сангийн аудио эсвэл зөвшөөрөгдсөн HTTPS холбоос сонгоно уу.',audio_cta_missing:'CTA нэгтгэгдээгүй тул шинэ файлыг хадгалсангүй. CTA аудиогоо шалгаад дахин бэлтгэнэ үү.',invalid_cta_gap:'CTA завсар 1–2 секунд байх ёстой.',invalid_cta_host:'CTA аудиог зөвхөн Cloudflare R2 public domain эсвэл Netlify дээр CTA_ALLOWED_HOSTS-д зөвшөөрсөн домэйнээс оруулна уу.',audio_source_unavailable:'Бүтэн аудиог уншиж чадсангүй. Файлын холбоос нээлттэй эсэхийг шалгана уу.',audio_too_large:'Аудио файлын хэмжээ зөвшөөрөгдсөн хязгаараас их байна (CTA 12 MB).' ,audio_processor_unavailable:'Netlify-ийн FFmpeg function ажиллахгүй байна. Deploy болон function log-ийг шалгана уу.',audio_processor_failed:'Preview тайрч боловсруулахад алдаа гарлаа.',audio_crop_start_failed:'Preview боловсруулах ажлыг эхлүүлж чадсангүй.',audio_crop_timeout:'Preview боловсруулах ажил хугацаа хэтэрсэн. Netlify function log-ийг шалгаж, дахин бэлтгэнэ үү.',r2_upload_failed:'Тайрсан preview-г R2-д хадгалж чадсангүй.'})[code]||code||'Preview боловсруулахад алдаа гарлаа.'}
 async function pollAudioCrop(jobInfo,storyId){
  clearTimeout(cropPollTimer);
  const job=typeof jobInfo==='string'?{id:jobInfo}:jobInfo;
@@ -254,12 +268,14 @@ async function pollAudioCrop(jobInfo,storyId){
  try{
   const result=await mediaRequest({action:'audio-crop-status',id:job.id,story_id:storyId}),row=result.job;
   if(editing?.id!==storyId)return;
+  const activeJob=decodeCropJob(localStorage.getItem('adult_audio_crop_'+storyId));if(activeJob&&activeJob.id!==job.id)return;
   if(row.status==='ready'){
-   localStorage.removeItem('adult_audio_crop_'+storyId);cropJobId=null;
+   localStorage.removeItem('adult_audio_crop_'+storyId);cropJobId=null;syncCtaAudio();
    if(!job.configuration||!cropConfigurationMatches(job.configuration,currentCropConfiguration())){
     segmentStatus.textContent='Preview боловсруулж дууссан боловч тохиргоо өөрчлөгдсөн (эсвэл хуучин ажлын мэдээлэл дутуу). Буруу CTA нийтлэхгүйн тулд автоматаар хадгалсангүй. PREVIEW БЭЛДЭХ товчийг дахин дарна уу.';
     return;
    }
+   if(job.configuration.ctaUrl&&!previewResultComplete(job.configuration,row.duration_seconds)){syncCtaAudio();segmentStatus.textContent=cropError('audio_cta_missing');$('#ctaAudioStatus').textContent=segmentStatus.textContent;toast(segmentStatus.textContent,true);return}
    $('#storyAudioPreview').value=row.preview_url;
    storyOverlay.audio_cta_rendered_url=job.configuration.ctaUrl;
    storyOverlay.audio_cta_rendered_gap=job.configuration.ctaGap;
@@ -270,20 +286,43 @@ async function pollAudioCrop(jobInfo,storyId){
    syncCtaAudio();
    $('#audioPreviewReady').textContent=`Preview бэлэн · ${row.start_seconds}–${row.end_seconds} сек · бүтэн аудио хэвээр хамгаалагдсан.`;
    segmentStatus.textContent='Сонгосон хэсгийг тайрч, CTA-тай нэг MP3 болгоод нийтэд тоглуулахад бэлэн болголоо.';
-   markStory();await saveStoryAction();return;
+   storyOverlay.audio_preview_rendered_duration=row.duration_seconds;markStory();await saveStoryAction({renderPreview:false});return;
   }
-  if(row.status==='failed'){localStorage.removeItem('adult_audio_crop_'+storyId);cropJobId=null;segmentStatus.textContent=cropError(row.error_code);return}
-  cropJobId=job.id;segmentStatus.textContent='Preview файлыг тайрч байна…';cropPollTimer=setTimeout(()=>pollAudioCrop(job,storyId),2200);
+  if(row.status==='failed'){localStorage.removeItem('adult_audio_crop_'+storyId);cropJobId=null;syncCtaAudio();segmentStatus.textContent=cropError(row.error_code);$('#ctaAudioStatus').textContent=segmentStatus.textContent;toast(segmentStatus.textContent,true);return}
+  cropJobId=job.id;segmentStatus.textContent='Preview + завсар + CTA-г боловсруулж байна…';$('#ctaAudioStatus').textContent=segmentStatus.textContent;cropPollTimer=setTimeout(()=>pollAudioCrop(job,storyId),2200);
  }catch(error){segmentStatus.textContent=cropError(error.message);cropPollTimer=setTimeout(()=>pollAudioCrop(job,storyId),5000)}
 }
 function resumeAudioCrop(storyId){clearTimeout(cropPollTimer);cropPollTimer=null;const job=decodeCropJob(localStorage.getItem('adult_audio_crop_'+storyId));if(job)pollAudioCrop(job,storyId)}
-$('#createAudioPreview').addEventListener('click',async()=>{const button=$('#createAudioPreview'),start=parseClockTime($('#storyPreviewStart').value),end=parseClockTime($('#storyPreviewEnd').value);try{if(!online)throw Error('Preview боловсруулахын тулд Netlify болон Supabase онлайн горим хэрэгтэй.');if(!Number.isFinite(start)||!Number.isFinite(end)||end-start<5||end-start>180)throw Error('Preview эхлэл, төгсгөлийг 0:00 / 6:30 хэлбэрээр оруулж, 5 секундээс 3 минут сонгоно уу.');if(storyDirty){button.disabled=true;segmentStatus.textContent='Эхлээд өгүүллэгийн өөрчлөлтийг хадгалж байна…';await saveStoryAction();if(storyDirty)throw Error('Эхлээд өгүүллэгээ хадгалах шаардлагатай.')};if(!editing?.id)throw Error('Өгүүллэгээ нэг удаа хадгалаад preview бэлтгэнэ үү.');const reference=safeUrl($('#storyAudioFull').value.trim());if(!reference)throw Error('Бүтэн аудио URL оруулна уу.');button.disabled=true;segmentStatus.textContent='Тайрсан preview бэлтгэж байна…';const result=await mediaRequest({action:'audio-crop-start',story_id:editing.id,reference,start_seconds:start,end_seconds:end,cta_url:effectiveCta(),cta_gap_seconds:Number($('#storyCtaGap').value)});cropJobId=result.job.id;const jobInfo={id:cropJobId,configuration:currentCropConfiguration()};localStorage.setItem('adult_audio_crop_'+editing.id,JSON.stringify(jobInfo));pollAudioCrop(jobInfo,editing.id)}catch(error){segmentStatus.textContent=cropError(error.message)}finally{button.disabled=false}});
-function newStory({force=false}={}){if(!force&&storyDirty&&!confirm('Хадгалаагүй өөрчлөлтийг орхиод шинэ өгүүллэг нээх үү?'))return;clearStoryIssue();$('#editorCopyStatus').textContent='';$('#bodyLoadIssue').hidden=true;editToken++;editing=null;bodyData={full_text:'',full_audio_url:''};bodyReady=true;for(const id of ['storyTitle','storySeriesTitleInput','storySeriesOrderInput','storyExcerpt','storyPreview','storyFull','storyTags','storyAudioPreview','storyCtaAudio','storyAudioFull','storyIndexReads','storyIndexReadsCustom','storyIndexListens'])$('#'+id).value='';$('#storyIndexReadsCustom').hidden=true;$('#storyPreviewStart').value='0:00';$('#storyPreviewEnd').value='1:00';$('#storyCtaGap').value='1.5';$('#audioPreviewReady').textContent='';segmentStatus.textContent='Бүтэн аудио оруулсны дараа энд сонсож IN/OUT цэгээ сонгоно.';playSelectedRange=false;sourcePlayer.pause();sourcePlayer.removeAttribute('src');sourcePlayer.hidden=true;$('#storyFull').disabled=false;$('#storyAudioFull').disabled=false;$('#storyPrice').value=9900;$('#storyOrder').value=allStories().length+1;$('#storyStatus').value='draft';fillCategories();fillAssetSelect($('#storyCover'));$('#storyAudioArtSearch').value='';fillAudioArtPicker();resetAudio();controlsSet('story',overlayDefault());storyOverlay.audio_player=audioArtDefault();drawAudioArtwork();syncCtaAudio();storyDirty=false;$('#saveStory').disabled=false;updateStoryMeta();renderList();setEditorTab('content');drafts.inspect()}
+let cropStarting=false;
+async function startAudioPreview({saveFirst=true}={}){
+ if(cropStarting)return;cropStarting=true;
+ const button=$('#createAudioPreview'),ctaButton=$('#renderCtaPreview');button.disabled=true;ctaButton.disabled=true;
+ try{
+  if(!online)throw Error('Preview боловсруулахын тулд Netlify болон Supabase онлайн горим хэрэгтэй.');
+  if(saveFirst&&storyDirty){segmentStatus.textContent='Эхлээд өгүүллэгийн өөрчлөлтийг хадгалж байна…';await saveStoryAction({renderPreview:false});if(storyDirty)throw Error('Эхлээд өгүүллэгээ хадгалах шаардлагатай.')}
+  if(!editing?.id)throw Error('Өгүүллэгээ нэг удаа хадгалаад preview бэлтгэнэ үү.');
+  const configuration=currentCropConfiguration(),{reference,start,end}=configuration,storyId=editing.id;
+  if(!reference)throw Error('Бүтэн аудио URL оруулна уу.');
+  if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end-start<5||end-start>180)throw Error('Preview эхлэл, төгсгөлийг 0:00 / 6:30 хэлбэрээр оруулж, 5 секундээс 3 минут сонгоно уу.');
+  const existing=decodeCropJob(localStorage.getItem('adult_audio_crop_'+storyId));
+  if(existing&&cropConfigurationMatches(existing.configuration,configuration)){pollAudioCrop(existing,storyId);return}
+  segmentStatus.textContent=configuration.ctaUrl?'Preview + завсар + CTA-г нэг файл болгож байна…':'Preview тайрч байна…';
+  const result=await mediaRequest({action:'audio-crop-start',story_id:storyId,reference,start_seconds:start,end_seconds:end,cta_url:configuration.ctaUrl,cta_gap_seconds:configuration.ctaGap});
+  const jobInfo={id:result.job.id,configuration};localStorage.setItem('adult_audio_crop_'+storyId,JSON.stringify(jobInfo));
+  if(editing?.id!==storyId)return;
+  cropJobId=result.job.id;syncCtaAudio();pollAudioCrop(jobInfo,storyId);
+ }catch(error){segmentStatus.textContent=cropError(error.code||error.message);toast(segmentStatus.textContent,true)}
+ finally{cropStarting=false;button.disabled=false;ctaButton.disabled=!!cropJobId}
+}
+$('#createAudioPreview').addEventListener('click',()=>startAudioPreview());
+$('#renderCtaPreview').addEventListener('click',()=>startAudioPreview());
+
+function newStory({force=false}={}){if(!force&&storyDirty&&!confirm('Хадгалаагүй өөрчлөлтийг орхиод шинэ өгүүллэг нээх үү?'))return;clearStoryIssue();clearTimeout(cropPollTimer);cropJobId=null;$('#editorCopyStatus').textContent='';$('#bodyLoadIssue').hidden=true;editToken++;editing=null;bodyData={full_text:'',full_audio_url:''};bodyReady=true;for(const id of ['storyTitle','storySeriesTitleInput','storySeriesOrderInput','storyExcerpt','storyPreview','storyFull','storyTags','storyAudioPreview','storyCtaAudio','storyAudioFull','storyIndexReads','storyIndexReadsCustom','storyIndexListens'])$('#'+id).value='';$('#storyIndexReadsCustom').hidden=true;$('#storyPreviewStart').value='0:00';$('#storyPreviewEnd').value='1:00';$('#storyCtaGap').value='1.5';$('#audioPreviewReady').textContent='';segmentStatus.textContent='Бүтэн аудио оруулсны дараа энд сонсож IN/OUT цэгээ сонгоно.';playSelectedRange=false;sourcePlayer.pause();sourcePlayer.removeAttribute('src');sourcePlayer.hidden=true;$('#storyFull').disabled=false;$('#storyAudioFull').disabled=false;$('#storyPrice').value=9900;$('#storyOrder').value=allStories().length+1;$('#storyStatus').value='draft';fillCategories();fillAssetSelect($('#storyCover'));$('#storyAudioArtSearch').value='';fillAudioArtPicker();resetAudio();controlsSet('story',overlayDefault());storyOverlay.audio_player=audioArtDefault();drawAudioArtwork();syncCtaAudio();storyDirty=false;$('#saveStory').disabled=false;updateStoryMeta();renderList();setEditorTab('content');drafts.inspect()}
 async function editStory(id,{force=false}={}){
  if(!force&&editing?.id===id)return;
  if(!force&&storyDirty&&!confirm('Хадгалаагүй өөрчлөлтийг орхиод өгүүллэг солих уу?'))return;
  clearStoryIssue();$('#editorCopyStatus').textContent='';$('#bodyLoadIssue').hidden=true;
- const s=allStories().find(x=>x.id===id);if(!s)return;const token=++editToken;editing=structuredClone(s);bodyReady=false;bodyData={full_text:'',full_audio_url:''};
+ const s=allStories().find(x=>x.id===id);if(!s)return;clearTimeout(cropPollTimer);cropJobId=null;const token=++editToken;editing=structuredClone(s);bodyReady=false;bodyData={full_text:'',full_audio_url:''};
  for(const [key,value] of Object.entries({storyTitle:s.title,storySeriesTitleInput:s.series_title||'',storySeriesOrderInput:s.series_order??'',storyExcerpt:s.excerpt,storyPreview:s.preview_text,storyPrice:s.price,storyOrder:s.sort_order,storyStatus:s.status,storyTags:(s.tags||[]).join(', '),storyAudioPreview:s.audio_preview_url||'',storyCtaAudio:s.overlay?.audio_cta_url||'',storyIndexReads:activityTier(s.overlay?.index_reads_override),storyIndexListens:activityTier(s.overlay?.index_listens_override)}))$('#'+key).value=value??'';$('#storyIndexReadsCustom').value=activityTier(s.overlay?.index_reads_override)==='custom'?String(s.overlay.index_reads_override):'';$('#storyIndexReadsCustom').hidden=$('#storyIndexReads').value!=='custom';$('#storyCtaGap').value=String(s.overlay?.audio_cta_gap_seconds||1.5);$('#storyPreviewStart').value=clockDuration(Number(s.overlay?.audio_preview_start)||0);$('#storyPreviewEnd').value=clockDuration(Number(s.overlay?.audio_preview_end)||60);$('#audioPreviewReady').textContent=isPrivateAudio(s.audio_preview_url)?'Энэ preview хувийн аудио руу зааж байна. Нийтэд сонсохын тулд тусдаа тайрсан preview бэлтгэнэ үү.':s.audio_preview_url?'Одоогийн нийтэд тоглох preview':'Preview хараахан үүсгээгүй';playSelectedRange=false;sourcePlayer.pause();sourcePlayer.hidden=true;
  $('#storyFull').value='';$('#storyAudioFull').value='';$('#storyFull').disabled=true;$('#storyAudioFull').disabled=true;$('#saveStory').disabled=true;resetAudio();fillCategories(s.category);fillAssetSelect($('#storyCover'),s.cover_id);$('#storyAudioArtSearch').value='';controlsSet('story',s.overlay||overlayDefault());syncCtaAudio();fillAudioArtPicker(storyOverlay.audio_player?.asset_id||'');drawAudioArtwork();storyDirty=false;updateStoryMeta();renderList();working('Хувийн агуулгыг ачаалж байна…');queuePreviews();
  await loadStoryBody(s,token);
@@ -307,10 +346,10 @@ async function reload({reset=false}={}){
  if(first||reset){fillHome();fillSettings();fillDesign();homeDirty=false;settingsDirty=false}else{fillAssetSelect($('#homeImage'),homeImage);const featured=$('#homeFeatured').value;$('#homeFeatured').innerHTML='<option value="">Автоматаар сонгох</option>'+allStories().map(st=>`<option value="${esc(st.id)}">${esc(st.title)}</option>`).join('');$('#homeFeatured').value=featured;imagePreview('home')}
  fillAssetSelect($('#storyCover'),storyCover);fillAudioArtPicker(storyOverlay.audio_player?.asset_id||'');drawAudioArtwork();fillCategories(category);imagePreview('story');dashboard();renderList();renderMedia();working('Синхрончилсон');queuePreviews();
 }
-async function saveStoryAction({following=[]}={}){
+async function saveStoryAction({following=[],renderPreview=true}={}){
  if(storySaving)return;if(mediaWorkspace?.pendingForStory())return toast('Энэ өгүүллэгийн зураг оруулж дуусахыг хүлээгээд хадгална уу.',true);storySaving=true;$('#savingNotice').hidden=false;$('#appRoot').inert=true;$('#appRoot').setAttribute('aria-busy','true');working('Хадгалж байна…');
  const savedEditToken=editToken;
- let invalidField;
+ let invalidField,savedStoryId;
  clearStoryIssue();
  try{if(!bodyReady)throw Error('Хувийн агуулга бүрэн ачаалагдаагүй байна. Өгүүллэгээ дахин сонгоно уу.');
  for(const id of ['storyTitle','storyExcerpt','storyPreview']){
@@ -323,7 +362,7 @@ async function saveStoryAction({following=[]}={}){
  formStory();$('#saveStory').disabled=true;working('Хадгалж байна…');
  const fullRaw=$('#storyAudioFull').value.trim(),previewRaw=$('#storyAudioPreview').value.trim(),ctaRaw=$('#storyCtaAudio').value.trim();if(fullRaw&&!safeUrl(fullRaw))throw Error('Бүтэн аудио URL буруу байна.');if(previewRaw&&!safeUrl(previewRaw))throw Error('Preview аудио URL буруу байна.');if(ctaRaw&&!safeUrl(ctaRaw))throw Error('CTA URL буруу байна.');
  const measured=await probeFullAudio();if(savedEditToken!==editToken)throw Error('Өгүүллэг солигдсон тул хадгалалтыг зогсоолоо.');if(fullRaw&&!measured&&$('#storyStatus').value==='published')throw Error('Нийтлэхээс өмнө бүтэн аудионы хугацааг уншуулах шаардлагатай. URL-аа шалгах эсвэл ноорог хадгална уу.');
- const draftKey=editing?.id||'new';const saved=await saveStory(formStory(),{full_text:$('#storyFull').value,full_audio_url:safeUrl(fullRaw)});editing={...saved};bodyData={story_id:saved.id,full_text:$('#storyFull').value,full_audio_url:safeUrl(fullRaw)};
+ const draftKey=editing?.id||'new';const saved=await saveStory(formStory(),{full_text:$('#storyFull').value,full_audio_url:safeUrl(fullRaw)});savedStoryId=saved.id;editing={...saved};bodyData={story_id:saved.id,full_text:$('#storyFull').value,full_audio_url:safeUrl(fullRaw)};
  storyDirty=false;updateStoryMeta();await drafts.clear(draftKey);
  try{
   await reload();
@@ -335,6 +374,7 @@ async function saveStoryAction({following=[]}={}){
  catch{drafts.inspect();working('Өгүүллэг хадгалагдсан');toast('Өгүүллэг хадгалагдлаа. Жагсаалтыг шинэчлэхийн тулд «Шинэчлэх» товчийг дарна уу.');return}
  toast('Өгүүллэг хадгалагдлаа · '+statusNames[saved.status]);
  }catch(e){working('Хадгалж чадсангүй');$('#storyFormIssue').textContent=e.message;$('#storyFormIssue').hidden=false;if(!invalidField)toast(e.message,true)}finally{storySaving=false;$('#savingNotice').hidden=true;$('#appRoot').inert=false;$('#appRoot').removeAttribute('aria-busy');$('#saveStory').disabled=!bodyReady;updateQueueControls();invalidField?.focus()}
+ if(renderPreview&&savedStoryId&&savedStoryId===editing?.id&&needsAudioRender())await startAudioPreview({saveFirst:false});
 }
 $('#storyList').addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)editStory(b.dataset.edit)});$('#newStory').addEventListener('click',()=>newStory());$('#overviewNew').addEventListener('click',()=>{setTab('stories');newStory()});$('#storyListSearch').addEventListener('input',renderList);$('#storyListStatus').addEventListener('change',renderList);
 $('#storyIndexReads').addEventListener('change',()=>{const custom=$('#storyIndexReads').value==='custom';$('#storyIndexReadsCustom').hidden=!custom;if(!custom)$('#storyIndexReadsCustom').value='';markStory()});
@@ -398,7 +438,7 @@ $('#adminNav').addEventListener('click',e=>{let b=e.target.closest('[data-tab]')
 $('#logoutBtn').addEventListener('click',async()=>{if(online){await signOut();$('#appRoot').classList.add('hidden');$('#loginWrap').classList.remove('hidden')}else location.href='index.html'+(CONFIG.localContentMode?'?local=1':'')});
 $$('[data-editor-tab]').forEach((button,index)=>button.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const tabs=$$('[data-editor-tab]'),next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;tabs[next].focus();setEditorTab(tabs[next].dataset.editorTab)}));
 $('#loginBtn').addEventListener('click',login);$('#loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
-async function login(){const button=$('#loginBtn');if(button.disabled)return;button.disabled=true;try{$('#loginError').classList.add('hidden');working('Нэвтэрч байна...');await signIn($('#loginEmail').value.trim(),$('#loginPassword').value);if(!await isAdmin()){await signOut();throw Error('Энэ хэрэглэгч admin_users бүртгэлд алга.');}await reload();newStory();$('#loginPassword').value='';$('#loginWrap').classList.add('hidden');$('#appRoot').classList.remove('hidden')}catch(e){$('#loginError').textContent=e.message;$('#loginError').classList.remove('hidden')}finally{button.disabled=false;working('Бэлэн')}}
+async function login(){const button=$('#loginBtn');if(button.disabled)return;button.disabled=true;try{$('#loginError').classList.add('hidden');working('Нэвтэрч байна...');await signIn($('#loginEmail').value.trim(),$('#loginPassword').value);if(!await isAdmin()){await signOut();throw Error('Энэ хэрэглэгч admin_users бүртгэлд алга.');}await reload();newStory();$('#loginPassword').value='';$('#loginWrap').classList.add('hidden');$('#appRoot').classList.remove('hidden');bulkCta.resume()}catch(e){$('#loginError').textContent=e.message;$('#loginError').classList.remove('hidden')}finally{button.disabled=false;working('Бэлэн')}}
 $$('[data-section="settings"] input,[data-section="settings"] textarea').forEach(el=>el.addEventListener('input',()=>{settingsDirty=true}));
 mediaWorkspace=createMediaWorkspace({
  data:()=>data,theme:()=>themeDraft,editor:()=>({id:editing?.id,token:editToken,title:$('#storyTitle').value}),value:scope=>$(scope==='story'?'#storyCover':'#homeImage').value,
@@ -420,7 +460,7 @@ window.addEventListener('keydown',event=>{
  if(event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.target.closest('input,textarea,select,[contenteditable=true]')){const search=active==='media'?$('#mediaSearch'):active==='stories'?$('#storyListSearch'):null;if(search){event.preventDefault();search.focus()}}
  if(event.key==='Escape'){$('#lightbox').classList.add('hidden');$('#assetEditModal').classList.add('hidden')}
 });
-async function boot(){if(!online){await reload();newStory();$('#appRoot').classList.remove('hidden');return}try{let s=await session();if(s&&await isAdmin()){await reload();newStory();$('#appRoot').classList.remove('hidden')}else{$('#loginWrap').classList.remove('hidden')}}catch(e){$('#appRoot').classList.add('hidden');$('#loginWrap').classList.remove('hidden');$('#loginError').textContent='Холболт амжилтгүй: '+e.message;$('#loginError').classList.remove('hidden')}}
+async function boot(){if(!online){await reload();newStory();$('#appRoot').classList.remove('hidden');return}try{let s=await session();if(s&&await isAdmin()){await reload();newStory();$('#appRoot').classList.remove('hidden');bulkCta.resume()}else{$('#loginWrap').classList.remove('hidden')}}catch(e){$('#appRoot').classList.add('hidden');$('#loginWrap').classList.remove('hidden');$('#loginError').textContent='Холболт амжилтгүй: '+e.message;$('#loginError').classList.remove('hidden')}}
 
 const draftFields=['storyTitle','storySeriesTitleInput','storySeriesOrderInput','storyExcerpt','storyPreview','storyFull','storyTags','storyAudioPreview','storyCtaAudio','storyCtaGap','storyAudioFull','storyPrice','storyOrder','storyStatus','storyCategory','storyCover','storyIndexReads','storyIndexReadsCustom','storyIndexListens','storyPreviewStart','storyPreviewEnd'];
 const drafts=createDrafts({key:()=>editing?.id||'new',ready:()=>bodyReady&&storyDirty&&!!data,capture:()=>({fields:Object.fromEntries(draftFields.map(id=>[id,$('#'+id).value])),overlay:storyOverlay,audio_seconds:audioState.seconds,base_updated_at:editing?.updated_at||null}),restore:payload=>{if(!bodyReady)return toast('Агуулга ачаалж дуусахыг хүлээнэ үү.',true);for(const id of draftFields)if(payload.fields?.[id]!==undefined)$('#'+id).value=payload.fields[id];controlsSet('story',payload.overlay||overlayDefault());resetAudio(safeUrl($('#storyAudioFull').value),payload.audio_seconds);syncCtaAudio();storyDirty=true;updateStoryMeta();queuePreviews()},onError:message=>toast(message,true)});

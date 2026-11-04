@@ -1,6 +1,6 @@
 import {memberRequest,apiMessage} from './customer-api.js?v=8.8.0';
 /* Customer sessions use the Netlify backend; CMS administrators keep Supabase Auth. */
-import {$,esc,authConfigured} from './core.js?v=8.8.0';
+import {$,esc,authConfigured} from './core.js?v=9.1.0';
 export function normalizePhone(value){
  let raw=String(value||'').trim();if(!/^[+\d\s().-]+$/.test(raw))throw Error('Утасны дугаараа зөв оруулна уу.');
  raw=raw.replace(/[\s().-]/g,'');if(raw.startsWith('00'))raw='+'+raw.slice(2);
@@ -32,10 +32,8 @@ export function createMemberAuth({onUser=()=>{}}={}){
    authRevision++;busy=true;submit.disabled=true;submit.textContent=signup?'Бүртгэл үүсгэж байна…':'Нэвтэрч байна…';$$local('[data-auth-mode]').forEach(b=>b.disabled=true);
    try{
     const result=await memberRequest(signup?'register':'login',{phone,password,name:form.elements.displayName?.value||''});
-    const data={session:{user:result.user}};
-    // A user record without a session is not a completed sign-in.
-    if(!data.session){notice.textContent='Бүртгэл шууд нэвтэрсэнгүй. Сайтын админтай холбогдоно уу.';notice.classList.remove('hidden');return}
-    form.reset();setUser(data.session.user);close();
+    if(!result.user||typeof result.user.id!=='string'||!result.user.id)throw Object.assign(Error('backend_unavailable'),{code:'backend_unavailable'});
+    form.reset();setUser(result.user);close();
    }catch(error){if(notice.isConnected){notice.textContent=authMessage(error);notice.classList.remove('hidden')}}
    finally{password=null;busy=false;if(submit.isConnected){submit.disabled=false;submit.textContent=signup?'Бүртгэл үүсгэх ↗':'Нэвтрэх ↗';$$local('[data-auth-mode]').forEach(b=>b.disabled=false)}}
   });

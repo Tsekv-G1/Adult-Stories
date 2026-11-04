@@ -24,11 +24,16 @@ async function main(){
   const name=path.basename(meta.entryPoint,'.js'),relative=file.replace(/^public\//,'');entries[name]=relative;
   const page=path.join(root,'public',name==='admin'?'admin.html':'index.html');
   const html=readFileSync(page,'utf8');
-  if(!html.includes(`data-app="${name}"`))throw Error('Missing bootstrap for '+name);
-  writeFileSync(page,html.replace(new RegExp(`(data-app="${name}" data-entry=")[^"]+`),`$1${relative}`));
+  const loaderTag = /<script\b[^>]*\bsrc="bootstrap\.js(?:\?[^"]*)?"[^>]*>/g;
+  const tags = html.match(loaderTag) || [];
+  if (tags.length !== 1 || !tags[0].includes(`data-app="${name}"`) || !/\bdata-entry="[^"]+"/.test(tags[0])) {
+   throw Error('Invalid startup script in '+page);
+  }
+  const updatedTag = tags[0].replace(/\bdata-entry="[^"]+"/, `data-entry="${relative}"`);
+  writeFileSync(page, html.replace(tags[0], () => updatedTag));
  }
  if(!entries.app||!entries.admin)throw Error('Both entry bundles are required');
- writeFileSync(path.join(root,'public/deployment.json'),JSON.stringify({version:'4.4.0',entries},null,2)+'\n');
+ writeFileSync(path.join(root,'public/deployment.json'),JSON.stringify({version:'4.5.0',entries},null,2)+'\n');
  console.log('Production bundles verified: '+Object.values(entries).join(', '));
 }
 main().catch(error=>{console.error(error);process.exitCode=1});

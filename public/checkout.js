@@ -1,4 +1,4 @@
-import {$,esc,fmtPrice} from './core.js?v=8.8.0';
+import {$,esc,fmtPrice} from './core.js?v=9.1.0';
 import {memberRequest,apiMessage} from './customer-api.js?v=9.0.0';
 export function createCheckout({memberAuth,modal,closeModal=()=>{},getSite=()=>({})}){
  let busy=false,pending=null,generation=0,owner=null,rendering=false,pollTimer=null,statusBusy=false;

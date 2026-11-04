@@ -1,4 +1,5 @@
 [build]
+  command = "npm run build"
   publish = "public"
 [build.environment]
   NODE_VERSION = "22"
@@ -8,6 +9,15 @@
 [functions."editor-audio-crop-background"]
   external_node_modules = ["ffmpeg-static"]
   included_files = ["node_modules/ffmpeg-static/ffmpeg"]
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+[[redirects]]
+  from = "/admin/"
+  to = "/admin"
+  status = 301
+  force = true
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
@@ -29,3 +39,21 @@
   for = "/config.js"
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+[[headers]]
+  for = "/admin"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+[[headers]]
+  for = "/dist/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

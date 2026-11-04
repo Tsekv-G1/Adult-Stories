@@ -1,6 +1,6 @@
 import {optimizedImage} from './image-delivery.js?v=8.5.0';
 import {originalImageUrl} from './image-upscale.js?v=8.5.0';
-import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadImage,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=8.5.0';
+import {esc,safeUrl,online,saveAsset,updateAsset,removeAsset,uploadImage,assignCover,reorderStories,mergeMedia,persistenceInfo} from './core.js?v=9.1.0';
 const MEDIA='application/x-adult-media',STORY='application/x-adult-story';
 export function createMediaWorkspace(o){
  const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],selected=new Set(),tasks=[];

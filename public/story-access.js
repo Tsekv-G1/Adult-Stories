@@ -1,3 +1,7 @@
+export function isPublishedStory(story,now=Date.now()){
+ return !!story&&story.status==='published'&&(!story.publish_at||Date.parse(story.publish_at)<=now);
+}
+
 export function hasActiveStoryEntitlement(entitlements, storyId, now=Date.now()){
  if(!storyId||!Array.isArray(entitlements))return false;
  return entitlements.some(row=>row&&!row.revoked_at&&(!row.expires_at||Date.parse(row.expires_at)>now)&&(!row.story_id||row.story_id===storyId));

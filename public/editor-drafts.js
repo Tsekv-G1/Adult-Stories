@@ -1,4 +1,4 @@
-import {supa,online,CONFIG} from './core.js?v=8.5.0';
+import {supa,online,CONFIG} from './core.js?v=9.1.0';
 // Drafts are scoped to the owner and story captured at inspection time.
 export function createDrafts({capture,restore,key,ready,onError=()=>{}}){
  const bar=document.createElement('div');bar.className='draft-bar';bar.innerHTML='<p role="status">Ноорог автоматаар хадгална.</p><button type="button" data-restore hidden>Ноорог сэргээх</button><button type="button" data-discard hidden>Ноорог хаях</button>';document.getElementById('storyEditorTitle').closest('.panel')?.prepend(bar);

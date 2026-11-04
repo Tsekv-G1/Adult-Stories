@@ -66,7 +66,7 @@ if(location.protocol==='file:'){
   grid.replaceChildren();
   const box=document.createElement('div');box.className='empty';
   const heading=document.createElement('strong');heading.textContent='Өгүүллэгүүдийг ачаалж чадсангүй';
-  const paragraph=document.createElement('p');paragraph.textContent='Сүлжээ, Supabase холболт эсвэл deploy файлуудыг шалгаад дахин ачаална уу.';
+  const paragraph=document.createElement('p');paragraph.textContent='Хуудас хугацаандаа ачаалсангүй. Холболтоо шалгаад дахин оролдоно уу.';
   const retry=document.createElement('button');retry.type='button';retry.className='btn outline';retry.textContent='Дахин ачаалах ↻';retry.addEventListener('click',()=>location.reload());
   box.append(heading,paragraph,retry);grid.append(box);
  },14000);

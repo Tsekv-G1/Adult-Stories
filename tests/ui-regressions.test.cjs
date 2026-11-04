@@ -105,7 +105,7 @@ test('reader offers preview and a full-listen purchase path before access, then 
   assert.match(html, /id="readerAudioFull" hidden>▶ Бүтэн сонсох/);
   assert.match(app, /previewTarget=audioAvailable\(s\)/);
   assert.match(app, /fullTarget=adultConfirmed\(\)&&access&&safeUrl\(body\.full_audio_url\)/);
-  assert.match(app, /readerAudioFull'\)\.hidden=!adultConfirmed\(\)\|\|!\(audioSeconds\(s\)\|\|fullTarget\)/);
+  assert.match(app, /readerAudioFull'\)\.hidden=!adultConfirmed\(\)\|\|!!bodyError\|\|!\(audioSeconds\(s\)\|\|fullTarget\)/);
   assert.match(app, /readerAudioTarget\?\.preview/);
   assert.match(app, /if\(target\?\.full\)\{playAudio\(s,target\.full\);return\}/);
   assert.match(app, /membershipOptions\(\)\}\);\$\('#readerSave'/);

@@ -1,5 +1,7 @@
 import {prepareUpscale} from './image-upscale.js?v=8.5.0';
 import {createLocalRepository} from './local-repository.js?v=8.5.0';
+import {importWithTimeout} from './loader-resilience.js?v=9.1.0';
+import {createClient} from '@supabase/supabase-js';
 /* Shared store: local preview or online Supabase. No private keys are ever embedded. */
 export const CONFIG=window.ADULT_CONFIG||{};
 export const authConfigured=Boolean(CONFIG.supabaseUrl&&CONFIG.supabaseAnonKey);
@@ -48,14 +50,20 @@ function rawLocal(){try{const raw=JSON.parse(localStorage.getItem(DB_KEY)||'null
 function mirrorLocal(content){try{localStorage.setItem(DB_KEY,JSON.stringify(content))}catch(e){console.warn('Browser mirror unavailable; disk store is authoritative',e)}}
 const repository=createLocalRepository({legacy:rawLocal,defaults:parseLocal,mirror:mirrorLocal,changed:alertChange});
 export const persistenceInfo=()=>online?{mode:'supabase',ready:true}:repository.info();
-let client=null;let clientPromise=null;let channel;
+let client=null;let channel;
 try{channel=new BroadcastChannel(CHANNEL)}catch{}
-export async function supa(){if(!authConfigured)return null;if(client)return client;if(!clientPromise)clientPromise=import('https://esm.sh/@supabase/supabase-js@2.49.8').then(({createClient})=>{client=createClient(CONFIG.supabaseUrl,CONFIG.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true}});return client});return clientPromise}
+// The SDK is bundled into each entry point; startup needs no third-party JS CDN.
+export async function supa(){
+ if(!authConfigured)return null;
+ if(client)return client;
+ client=createClient(CONFIG.supabaseUrl,CONFIG.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true}});
+ return client;
+}
 function alertChange(){try{channel?.postMessage(Date.now())}catch{}window.dispatchEvent(new CustomEvent('adult-data-changed'))}
 function updateLocal(next){localStorage.setItem(DB_KEY,JSON.stringify(next));alertChange()}
 export async function getData({admin=false}={}){
  if(!online)return repository.read({admin});
- const sb=await supa();let [s,a,st]=await Promise.all([sb.from('site_settings').select('*').eq('id','main').maybeSingle(),sb.from('media_assets').select('*').order('created_at',{ascending:false}),sb.from('stories').select('*').order('sort_order',{ascending:true}).order('created_at',{ascending:false})]);
+ const sb=await supa();let [s,a,st]=await importWithTimeout(()=>Promise.all([sb.from('site_settings').select('*').eq('id','main').maybeSingle(),sb.from('media_assets').select('*').order('created_at',{ascending:false}),sb.from('stories').select('*').order('sort_order',{ascending:true}).order('created_at',{ascending:false})]),12000);
  for(const r of [s,a,st])if(r.error)throw r.error;
  return {site:s.data?.content||defaults().site,assets:a.data||[],stories:st.data||[],bodies:[]};
 }
@@ -76,10 +84,10 @@ export async function updateAsset(asset){
  let sb=await supa();const {id,...patch}=asset;let {data,error}=await sb.from('media_assets').update(patch).eq('id',id).select().single();if(error)throw error;alertChange();return data;
 }
 export async function removeAsset(id){if(!online){if(await repository.mutate('remove-asset',{id}))return;let d=parseLocal();d.assets=d.assets.filter(a=>a.id!==id);for(let s of d.stories)if(s.cover_id===id)s.cover_id=null;if(d.site.hero_asset_id===id)d.site.hero_asset_id=null;updateLocal(d);return}let sb=await supa();let r=await sb.from('media_assets').delete().eq('id',id);if(r.error)throw r.error;alertChange()}
-export async function session(){if(!online)return null;let sb=await supa();let r=await sb.auth.getSession();return r.data.session}
-export async function signIn(email,password){let sb=await supa();let r=await sb.auth.signInWithPassword({email,password});if(r.error)throw r.error;return r.data}
-export async function signOut(){let sb=await supa();let r=await sb.auth.signOut();if(r.error)throw r.error}
-export async function isAdmin(){if(!online)return true;let sb=await supa();let r=await sb.rpc('is_admin');if(r.error)throw r.error;return !!r.data}
+export async function session(){if(!online)return null;let sb=await supa();let r=await importWithTimeout(()=>sb.auth.getSession(),12000);return r.data.session}
+export async function signIn(email,password){let sb=await supa();let r=await importWithTimeout(()=>sb.auth.signInWithPassword({email,password}),12000);if(r.error)throw r.error;return r.data}
+export async function signOut(){let sb=await supa();let r=await importWithTimeout(()=>sb.auth.signOut(),12000);if(r.error)throw r.error}
+export async function isAdmin(){if(!online)return true;let sb=await supa();let r=await importWithTimeout(()=>sb.rpc('is_admin'),12000);if(r.error)throw r.error;return !!r.data}
 export async function mediaRequest(payload){
  const sb=await supa();if(!sb)throw Error('R2 upload хийхдээ Netlify дээрх админаар нэвтэрнэ үү.');
  const {data}=await sb.auth.getSession();if(!data.session)throw Error('Админаар нэвтэрнэ үү.');

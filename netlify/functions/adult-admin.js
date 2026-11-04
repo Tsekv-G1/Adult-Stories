@@ -24,6 +24,7 @@ exports.handler=c.endpoint(['POST'],async e=>{
  }
  if(b.action==='audio-crop-start'){
   const storyId=c.uuid(b.story_id),reference=String(b.reference||''),start=Number(b.start_seconds),end=Number(b.end_seconds);
+  let cta;try{cta=require('../../server/audio-crop.cjs').ctaSettings(b.cta_url,b.cta_gap_seconds)}catch(error){c.fail(400,error.message)}
   if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end-start<5||end-start>180)c.fail(400,'invalid_audio_range');
   const row=(await c.db('story_private?story_id=eq.'+storyId+'&select=full_audio_url&limit=1'))?.[0];
   if(!row||row.full_audio_url!==reference)c.fail(409,'save_audio_first');
@@ -31,15 +32,20 @@ exports.handler=c.endpoint(['POST'],async e=>{
   const r2=require('../../server/r2.cjs'),target=await r2.audioPreviewTarget(storyId);
   const created=await c.db('adult_audio_crop_jobs',{method:'POST',data:{story_id:storyId,status:'queued',start_seconds:start,end_seconds:end,preview_url:target.url,error_code:''},prefer:'return=representation'}),job=created?.[0];
   if(!job?.id)c.fail(503,'audio_crop_start_failed');
-  const payload=JSON.stringify({job_id:job.id,source_url:source,put_url:target.put_url,start_seconds:start,end_seconds:end});
+  const payload=JSON.stringify({job_id:job.id,source_url:source,put_url:target.put_url,start_seconds:start,end_seconds:end,cta_url:cta.url,cta_gap_seconds:cta.gap});
   const signature=require('node:crypto').createHmac('sha256',c.config('SUPABASE_SERVICE_ROLE_KEY')).update(payload).digest('hex');
   let started;try{started=await fetch(c.origin()+'/.netlify/functions/editor-audio-crop-background',{method:'POST',headers:{'Content-Type':'application/json','X-Editor-Audio-Signature':signature},body:payload,signal:AbortSignal.timeout(12000)})}catch{started=null}
   if(!started||!(started.ok||started.status===202)){await c.db('adult_audio_crop_jobs?id=eq.'+job.id,{method:'PATCH',data:{status:'failed',error_code:'audio_crop_start_failed',updated_at:new Date().toISOString()},prefer:'return=minimal'});c.fail(503,'audio_crop_start_failed')}
   return c.reply(200,{ok:true,job:{id:job.id,status:'queued',story_id:storyId}})
  }
  if(b.action==='audio-crop-status'){
-  const id=c.uuid(b.id),storyId=c.uuid(b.story_id),job=(await c.db('adult_audio_crop_jobs?id=eq.'+id+'&story_id=eq.'+storyId+'&select=id,story_id,status,start_seconds,end_seconds,duration_seconds,preview_url,error_code&limit=1'))?.[0];
-  if(!job)c.fail(404,'audio_crop_not_found');return c.reply(200,{ok:true,job});
+  const id=c.uuid(b.id),storyId=c.uuid(b.story_id),job=(await c.db('adult_audio_crop_jobs?id=eq.'+id+'&story_id=eq.'+storyId+'&select=id,story_id,status,start_seconds,end_seconds,duration_seconds,preview_url,error_code,created_at,updated_at&limit=1'))?.[0];
+  if(!job)c.fail(404,'audio_crop_not_found');
+  if(require('../../server/audio-crop.cjs').cropJobExpired(job)){
+   const rows=await c.db('adult_audio_crop_jobs?id=eq.'+id+'&status=eq.'+job.status,{method:'PATCH',data:{status:'failed',error_code:'audio_crop_timeout',updated_at:new Date().toISOString()},prefer:'return=representation'});
+   if(rows?.[0])Object.assign(job,rows[0]);
+  }
+  return c.reply(200,{ok:true,job});
  }
  if(b.action==='audio-upload')return c.reply(200,{ok:true,...await require('../../server/audio.cjs').upload(String(b.extension||''))});
  if(b.action==='audio-preview')return c.reply(200,{ok:true,url:await require('../../server/audio.cjs').sign(String(b.reference||''))});

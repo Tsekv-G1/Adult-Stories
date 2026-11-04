@@ -1,5 +1,5 @@
 /* One real audio source, shared by hero/cards/reader. No synthetic voice substitution. */
-import {$,safeUrl} from './core.js?v=8.8.0';
+import {$,safeUrl} from './core.js?v=9.1.0';
 import {clockDuration} from './studio.js?v=8.19.0';
 import {sleepOptions,resumeSeconds,remainingSleepMinutes,sleepExpired} from './audio-experience.js?v=9.0.0';
 export function createAudioPlayer({onChange=()=>{},onProgress=()=>{},onEnded=()=>{}}={}) {

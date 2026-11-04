@@ -6,7 +6,7 @@ import {createDrafts} from './editor-drafts.js?v=8.5.0';
 import {audioPreview,isPrivateAudio} from './private-audio.js?v=8.19.0';
 import {importCloudBackup} from './cloud-import.js?v=8.5.0';
 import {createMediaWorkspace} from './media-workspace.js?v=8.5.0';
-import {CONFIG,online,$,$$,esc,overlayCSS,overlayDefault,safeUrl,getData,getBody,saveStory,removeStory,saveSite,saveAsset,updateAsset,uploadCloudinary,session,signIn,signOut,isAdmin,persistenceInfo,importLocalBackup,mediaRequest} from './core.js?v=8.9.0';
+import {CONFIG,online,$,$$,esc,overlayCSS,overlayDefault,safeUrl,getData,getBody,saveStory,removeStory,saveSite,saveAsset,updateAsset,uploadCloudinary,session,signIn,signOut,isAdmin,persistenceInfo,importLocalBackup,mediaRequest} from './core.js?v=9.1.0';
 import {visualDefault,cloudSettings,visualFor,cropFor,applyPhoto,audioSeconds,clockDuration,automaticSlug,automaticPublishAt,measureAudio,parseClockTime} from './studio.js?v=8.19.0';
 const upscaleCheckbox=document.getElementById('autoUpscaleImages');if(upscaleCheckbox){upscaleCheckbox.checked=CONFIG.autoUpscaleImages!==false;if(CONFIG.mediaProvider==='r2')upscaleCheckbox.closest('label').hidden=true;}
 let mediaWorkspace=null;
@@ -229,7 +229,7 @@ $('#adminNav').addEventListener('click',e=>{let b=e.target.closest('[data-tab]')
 $('#logoutBtn').addEventListener('click',async()=>{if(online){await signOut();$('#appRoot').classList.add('hidden');$('#loginWrap').classList.remove('hidden')}else location.href='index.html'+(CONFIG.localContentMode?'?local=1':'')});
 $$('[data-editor-tab]').forEach((button,index)=>button.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const tabs=$$('[data-editor-tab]'),next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;tabs[next].focus();setEditorTab(tabs[next].dataset.editorTab)}));
 $('#loginBtn').addEventListener('click',login);$('#loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
-async function login(){try{$('#loginError').classList.add('hidden');working('Нэвтэрч байна...');await signIn($('#loginEmail').value,$('#loginPassword').value);if(!await isAdmin()){await signOut();throw Error('Энэ хэрэглэгч admin_users бүртгэлд алга.');}$('#loginWrap').classList.add('hidden');$('#appRoot').classList.remove('hidden');await reload();newStory()}catch(e){$('#loginError').textContent=e.message;$('#loginError').classList.remove('hidden')}}
+async function login(){const button=$('#loginBtn');if(button.disabled)return;button.disabled=true;try{$('#loginError').classList.add('hidden');working('Нэвтэрч байна...');await signIn($('#loginEmail').value.trim(),$('#loginPassword').value);if(!await isAdmin()){await signOut();throw Error('Энэ хэрэглэгч admin_users бүртгэлд алга.');}await reload();newStory();$('#loginPassword').value='';$('#loginWrap').classList.add('hidden');$('#appRoot').classList.remove('hidden')}catch(e){$('#loginError').textContent=e.message;$('#loginError').classList.remove('hidden')}finally{button.disabled=false;working('Бэлэн')}}
 $$('[data-section="settings"] input,[data-section="settings"] textarea').forEach(el=>el.addEventListener('input',()=>{settingsDirty=true}));
 mediaWorkspace=createMediaWorkspace({
  data:()=>data,theme:()=>themeDraft,editor:()=>({id:editing?.id,token:editToken,title:$('#storyTitle').value}),value:scope=>$(scope==='story'?'#storyCover':'#homeImage').value,
@@ -247,7 +247,7 @@ window.addEventListener('keydown',event=>{
  if(event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.target.closest('input,textarea,select,[contenteditable=true]')){const search=active==='media'?$('#mediaSearch'):active==='stories'?$('#storyListSearch'):null;if(search){event.preventDefault();search.focus()}}
  if(event.key==='Escape'){$('#lightbox').classList.add('hidden');$('#assetEditModal').classList.add('hidden')}
 });
-async function boot(){if(!online){$('#appRoot').classList.remove('hidden');await reload();newStory();return}try{let s=await session();if(s&&await isAdmin()){$('#appRoot').classList.remove('hidden');await reload();newStory()}else{$('#loginWrap').classList.remove('hidden')}}catch(e){$('#loginWrap').classList.remove('hidden');$('#loginError').textContent='Холболт амжилтгүй: '+e.message;$('#loginError').classList.remove('hidden')}}
+async function boot(){if(!online){await reload();newStory();$('#appRoot').classList.remove('hidden');return}try{let s=await session();if(s&&await isAdmin()){await reload();newStory();$('#appRoot').classList.remove('hidden')}else{$('#loginWrap').classList.remove('hidden')}}catch(e){$('#appRoot').classList.add('hidden');$('#loginWrap').classList.remove('hidden');$('#loginError').textContent='Холболт амжилтгүй: '+e.message;$('#loginError').classList.remove('hidden')}}
 
 const draftFields=['storyTitle','storySeriesTitleInput','storySeriesOrderInput','storyExcerpt','storyPreview','storyFull','storyTags','storyAudioPreview','storyCtaAudio','storyCtaGap','storyAudioFull','storyPrice','storyOrder','storyStatus','storyCategory','storyCover','storyIndexReads','storyIndexReadsCustom','storyIndexListens','storyPreviewStart','storyPreviewEnd'];
 const drafts=createDrafts({key:()=>editing?.id||'new',ready:()=>bodyReady&&storyDirty&&!!data,capture:()=>({fields:Object.fromEntries(draftFields.map(id=>[id,$('#'+id).value])),overlay:storyOverlay,audio_seconds:audioState.seconds,base_updated_at:editing?.updated_at||null}),restore:payload=>{if(!bodyReady)return toast('Агуулга ачаалж дуусахыг хүлээнэ үү.',true);for(const id of draftFields)if(payload.fields?.[id]!==undefined)$('#'+id).value=payload.fields[id];controlsSet('story',payload.overlay||overlayDefault());resetAudio(safeUrl($('#storyAudioFull').value),payload.audio_seconds);syncCtaAudio();storyDirty=true;updateStoryMeta();queuePreviews()},onError:message=>toast(message,true)});
@@ -264,6 +264,8 @@ try{await boot()}catch(e){
   const detail=document.createElement('p');detail.className='small';detail.textContent=e?.message||String(e);help.querySelector('.open-help-card').append(detail);
  }
 }
+
+window.dispatchEvent(new Event('adult-admin-boot-complete'));
 
 function renderCategoryManager(){
  const list=$('#categoryManagerList');if(!list)return;const values=[...new Set($('#settingCategories').value.split('\n').map(v=>v.trim()).filter(Boolean))];

@@ -3,13 +3,14 @@ const c=require('./core.cjs');
 const r2=require('./r2.cjs');
 const audio=require('./audio-crop.cjs');
 const uuid=v=>/^[a-f\d-]{36}$/i.test(v||'');
+const savedGap=site=>{const gap=Number(site.shared_cta_gap_seconds);return Number.isFinite(gap)&&gap>=1&&gap<=2?gap:1.5};
 async function start(storyId,ctaUrl,gap){
  c.uuid(storyId);const cta=audio.ctaSettings(ctaUrl,gap);
  if(!cta.url)c.fail(400,'invalid_cta_url');
  const story=(await c.db('stories?id=eq.'+storyId+'&select=id,overlay,audio_preview_url,updated_at&limit=1'))?.[0];
  if(!story)c.fail(404,'story_unavailable');
  const site=(await c.db('site_settings?id=eq.main&select=content&limit=1'))?.[0]?.content||{};
- if(site.shared_cta_url!==cta.url)c.fail(409,'shared_cta_changed');
+ if(site.shared_cta_url!==cta.url||savedGap(site)!==cta.gap)c.fail(409,'shared_cta_changed');
  const preview=story.audio_preview_url||site.shared_preview_url||'',overlay=story.overlay||{};
  if(!preview)return {skipped:true,reason:'no_preview'};
  if(overlay.audio_preview_rendered_url===preview&&overlay.audio_cta_rendered_url===cta.url&&Number(overlay.audio_cta_rendered_gap)===cta.gap)return {skipped:true,reason:'unchanged'};
@@ -32,7 +33,7 @@ async function apply(input,result){
  const target=input.apply_story;if(!target||!uuid(target.id))throw Error('invalid_id');
  const row=(await c.db('stories?id=eq.'+target.id+'&select=id,overlay,audio_preview_url,updated_at&limit=1'))?.[0];
  const site=(await c.db('site_settings?id=eq.main&select=content&limit=1'))?.[0]?.content||{};
- if(site.shared_cta_url!==input.cta_url)throw Error('shared_cta_changed');
+ if(site.shared_cta_url!==input.cta_url||savedGap(site)!==Number(input.cta_gap_seconds))throw Error('shared_cta_changed');
  if(!row||row.updated_at!==target.updated_at||(row.audio_preview_url||site.shared_preview_url||'')!==target.preview)throw Error('story_changed_elsewhere');
  const privateRow=(await c.db('story_private?story_id=eq.'+target.id+'&select=full_audio_url&limit=1'))?.[0];
  const overlay={...row.overlay},start=Math.round(Number(overlay.audio_preview_start)||0),end=start+Math.round(result.base_seconds);

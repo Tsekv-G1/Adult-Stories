@@ -7,7 +7,7 @@ test('cleanup keeps any referenced preview and only removes unreferenced old job
  t.mock.method(c,'db',async(route,options)=>{
   if(options?.method==='PATCH')return [];
   if(route.includes('status=in.(queued,processing)'))return [];
-  if(route.startsWith('adult_audio_crop_jobs?')){assert.match(route,/created_at=lt\./);return [{id,preview_url:'keep.mp3'},{id,preview_url:'unused.mp3'},{id,preview_url:'shared.mp3'},{id,preview_url:'source.mp3'}]}
+  if(route.startsWith('adult_audio_crop_jobs?')){assert.match(route,/created_at=lt\./);return [{id,preview_url:'keep.mp3'},{id,preview_url:'unused.mp3',error_code:'unused_preview_pending',updated_at:new Date(Date.now()-25*60*60*1000).toISOString()},{id,preview_url:'shared.mp3'},{id,preview_url:'source.mp3'}]}
   if(route.startsWith('stories?'))return [{audio_preview_url:'keep.mp3'}];
   if(route.startsWith('site_settings?'))return [{content:{shared_preview_url:'shared.mp3'}}];
   if(route.startsWith('story_private?'))return [{full_audio_url:'source.mp3'}];
@@ -26,4 +26,23 @@ test('R2 deletion cannot remove originals, CTA files, or arbitrary bucket object
  for(const url of ['https://media.example.com/CTA.mp3','https://media.example.com/generated/full.mp3','https://other.example.com/audio-preview/'+id+'/'+id+'.mp3'])assert.equal(await r2.deleteGeneratedPreview(url),false);
  assert.equal(calls.length,0);
  assert.equal(await r2.deleteGeneratedPreview('https://media.example.com/audio-preview/'+id+'/'+id+'.mp3'),true);assert.equal(calls[0].Bucket,'public-media');
+});
+
+test('cleanup waits a full 24 hours after detecting an unused file, even if the file was created weeks ago',()=>{
+ const {retentionAction}=require('../server/preview-cleanup.cjs'),now=Date.now();
+ assert.equal(retentionAction({created_at:'2020-01-01'},false,now),'mark');
+ assert.equal(retentionAction({error_code:'unused_preview_pending',updated_at:new Date(now-23*60*60*1000).toISOString()},false,now),'wait');
+ assert.equal(retentionAction({error_code:'unused_preview_pending',updated_at:new Date(now-24*60*60*1000).toISOString()},false,now),'delete');
+ assert.equal(retentionAction({error_code:'unused_preview_pending',updated_at:'2020-01-01'},true,now),'restore');
+ assert.equal(retentionAction({error_code:'unused_preview_pending',updated_at:'bad'},false,now),'mark');
+});
+test('first cleanup marks a newly superseded preview instead of deleting it immediately',async t=>{
+ const writes=[];t.mock.method(r2,'deleteGeneratedPreview',()=>{throw Error('Must not delete on first observation')});
+ t.mock.method(c,'db',async(route,options)=>{
+  if(options?.method==='PATCH'){writes.push(options.data);return []}
+  if(route.includes('status=in.(queued,processing)'))return [];
+  if(route.startsWith('adult_audio_crop_jobs?'))return [{id,preview_url:'unused.mp3',created_at:'2020-01-01',error_code:'',updated_at:'2020-01-01'}];
+  return [];
+ });
+ const result=await cleanup();assert.equal(result.deleted,0);assert.equal(result.marked,1);assert.ok(writes.some(row=>row.error_code==='unused_preview_pending'));
 });

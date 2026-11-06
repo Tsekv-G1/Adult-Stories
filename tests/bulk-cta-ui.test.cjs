@@ -32,3 +32,26 @@ test('interrupted dispatch resumes from the persisted story rather than restarti
  const bulk=module.createBulkCta({status:{textContent:''}});await bulk.apply({ctaUrl:'cta',gap:1.5});assert.equal(saved.size,1);
  disconnected=false;await bulk.resume();assert.equal(applied,2);assert.equal(saved.size,0);
 });
+
+test('malformed saved queue does not crash admin startup',async t=>{
+ let calls=0;const {module,saved}=await setup(t,async()=>{calls++;throw Error('Must not call backend')});
+ saved.set('adult_bulk_cta_v1',JSON.stringify({items:null,failed:null}));
+ await module.createBulkCta({status:{textContent:''}}).resume();assert.equal(calls,0);assert.equal(saved.size,0);
+});
+test('blocked browser storage does not prevent a global CTA update',async t=>{
+ const {module}=await setup(t,async request=>{
+  if(request.action==='audio-cta-catalog')return {stories:[{id:'story'}],next_offset:null};
+  if(request.action==='audio-cta-apply')return {skipped:true,reason:'unchanged'};
+  if(request.action==='audio-preview-cleanup')return {deleted:0};throw Error('unexpected');
+ });
+ global.localStorage.setItem=()=>{throw Error('QuotaExceeded')};global.localStorage.removeItem=()=>{throw Error('SecurityError')};
+ const status={textContent:''};await module.createBulkCta({status}).apply({ctaUrl:'cta',gap:1.5});assert.match(status.textContent,/1\/1/);assert.match(status.textContent,/Табыг хаахгүй/);
+});
+test('temporary backend outage pauses the current story without marking the whole catalog failed',async t=>{
+ const {module,saved}=await setup(t,async request=>{
+  if(request.action==='audio-cta-catalog')return {stories:[{id:'one'},{id:'two'}],next_offset:null};
+  throw Object.assign(Error('offline'),{code:'database_unavailable'});
+ });
+ await module.createBulkCta({status:{textContent:''}}).apply({ctaUrl:'cta',gap:1.5});
+ const task=JSON.parse(saved.get('adult_bulk_cta_v1'));assert.equal(task.index,0);assert.deepEqual(task.failed,[]);
+});

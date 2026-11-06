@@ -42,3 +42,33 @@ test('background crop accepts only the exact server-signed job request',async()=
   if(previous===undefined)delete process.env.SUPABASE_SERVICE_ROLE_KEY;else process.env.SUPABASE_SERVICE_ROLE_KEY=previous;
  }
 });
+
+test('duplicate signed background deliveries claim the job only once',async t=>{
+ const processor=require('../server/audio-crop.cjs'),old=process.env.SUPABASE_SERVICE_ROLE_KEY;process.env.SUPABASE_SERVICE_ROLE_KEY='atomic-test-key';
+ t.after(()=>{if(old===undefined)delete process.env.SUPABASE_SERVICE_ROLE_KEY;else process.env.SUPABASE_SERVICE_ROLE_KEY=old});
+ let claimed=false,renders=0;
+ t.mock.method(core,'db',async(route,options)=>{
+  if(!options)return [{id:'123e4567-e89b-12d3-a456-426614174000',status:'queued'}];
+  if(route.includes('status=eq.queued')){if(claimed)return [];claimed=true;return [{id:'123e4567-e89b-12d3-a456-426614174000',status:'processing'}]}
+  return [];
+ });
+ t.mock.method(processor,'crop',async()=>{renders++;await new Promise(resolve=>setImmediate(resolve));return {duration_seconds:31.5}});
+ const body=JSON.stringify({job_id:'123e4567-e89b-12d3-a456-426614174000'}),signature=crypto.createHmac('sha256','atomic-test-key').update(body).digest('hex');
+ const event={httpMethod:'POST',body,headers:{'x-editor-audio-signature':signature}};
+ const replies=await Promise.all([background.handler(event),background.handler(event)]);
+ assert.equal(renders,1);assert.ok(replies.some(row=>JSON.parse(row.body).ignored===true));assert.ok(replies.every(row=>row.statusCode===200));
+});
+
+test('a failed claim cannot mark a job owned by another worker as failed',async t=>{
+ const old=process.env.SUPABASE_SERVICE_ROLE_KEY;process.env.SUPABASE_SERVICE_ROLE_KEY='claim-failure-test';
+ t.after(()=>{if(old===undefined)delete process.env.SUPABASE_SERVICE_ROLE_KEY;else process.env.SUPABASE_SERVICE_ROLE_KEY=old});
+ let failureWrites=0;
+ t.mock.method(core,'db',async(route,options)=>{
+  if(!options)return [{id:'123e4567-e89b-12d3-a456-426614174000',status:'queued'}];
+  if(route.includes('status=eq.queued'))throw Error('temporary database failure');
+  if(options.data.status==='failed')failureWrites++;return [];
+ });
+ const body=JSON.stringify({job_id:'123e4567-e89b-12d3-a456-426614174000'}),signature=crypto.createHmac('sha256','claim-failure-test').update(body).digest('hex');
+ const reply=await background.handler({httpMethod:'POST',body,headers:{'x-editor-audio-signature':signature}});
+ assert.equal(reply.statusCode,503);assert.equal(failureWrites,0);
+});

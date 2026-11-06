@@ -54,9 +54,9 @@ exports.handler=c.endpoint(['GET','POST'],async e=>{
   await c.rate(e,'payment-report',8,900,u.id);
   const id=c.uuid(b.id);
   // PATCH only the first time so retries cannot send duplicate notifications.
-  const rows=await c.db('adult_payment_orders?id=eq.'+id+'&member_id=eq.'+u.id+'&status=eq.pending&payment_reported_at=is.null&select=id,kind,amount',{method:'PATCH',data:{payment_reported_at:new Date().toISOString()},prefer:'return=representation'});
+  const rows=await c.db('adult_payment_orders?id=eq.'+id+'&member_id=eq.'+u.id+'&status=eq.pending&payment_reported_at=is.null&select=id,member_id,kind,membership_days,amount',{method:'PATCH',data:{payment_reported_at:new Date().toISOString()},prefer:'return=representation'});
   if(!rows?.length){const existing=(await c.db('adult_payment_orders?id=eq.'+id+'&member_id=eq.'+u.id+'&select=status,payment_reported_at&limit=1'))?.[0];if(existing?.status==='pending'&&existing.payment_reported_at)return c.reply(200,{ok:true,already_reported:true});c.fail(409,'order_not_pending')}
-  await require('../../server/telegram.cjs').notifyPayment({event:'reported',order:rows[0]});return c.reply(200,{ok:true})
+  await require('../../server/telegram.cjs').notifyPayment({event:'reported',order:rows[0],member:u});return c.reply(200,{ok:true})
  }
  c.fail(400,'invalid_action');
 });

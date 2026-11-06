@@ -41,6 +41,10 @@ function checkModuleGraph(dir){
  }
 }
 checkModuleGraph('public');
+const ffmpeg=process.env.FFMPEG_PATH||require('ffmpeg-static');
+assert.ok(ffmpeg&&existsSync(ffmpeg),'FFmpeg binary is missing; install dependencies with npm install scripts enabled.');
+const ffmpegCheck=spawnSync(ffmpeg,['-version'],{encoding:'utf8',timeout:10000});
+assert.equal(ffmpegCheck.status,0,'FFmpeg cannot execute in this build environment.');
 const admin=readFileSync(path.join(root,'public/admin.html'),'utf8');
 for(const id of ['storyCtaAudio','storyCtaGap','ctaAudioPlayer','audioCombinedPreview'])assert.ok(admin.includes(`id="${id}"`),`Missing CTA UI: ${id}`);
 console.log(`Static production build verified: ${checked} JS files and HTML asset references.`);

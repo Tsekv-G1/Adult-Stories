@@ -51,7 +51,7 @@ test('transfer reporting can only advance pending orders once, with member owner
  assert.match(source,/await c\.rate\(e,'payment-report',8,900,u\.id\)/);
  assert.match(source,/member_id=eq\.'\+u\.id\+'\&status=eq\.pending\&payment_reported_at=is\.null/);
  assert.match(source,/already_reported:true/);
- assert.match(source,/notifyPayment\(\{event:'reported',order:rows\[0\]\}\)/);
+ assert.match(source,/notifyPayment\(\{event:'reported',order:rows\[0\],member:u\}\)/);
 });
 
 test('payment details show backend memo instead of an invented IBAN',()=>{

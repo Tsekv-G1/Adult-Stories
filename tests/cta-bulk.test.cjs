@@ -34,5 +34,11 @@ test('completed bulk audio preserves story settings and uses a conditional updat
 });
 test('a concurrently edited story is not overwritten by bulk audio',async t=>{
  t.mock.method(c,'db',async route=>route.startsWith('stories?')?[{id,updated_at:'new-version',audio_preview_url:'old.mp3'}]:[{content:{shared_cta_url:cta}}]);
- await assert.rejects(bulk.apply({cta_url:cta,apply_story:{id,preview:'old.mp3',updated_at:'old-version'}},{base_seconds:25}),/story_changed_elsewhere/);
+ await assert.rejects(bulk.apply({cta_url:cta,cta_gap_seconds:1.5,apply_story:{id,preview:'old.mp3',updated_at:'old-version'}},{base_seconds:25}),/story_changed_elsewhere/);
+});
+
+test('an old bulk render cannot publish after the global gap changes',async t=>{
+ t.mock.method(c,'db',async route=>route.startsWith('stories?')?[{id,audio_preview_url:'old.mp3',updated_at:'same',overlay:{}}]:[{content:{shared_cta_url:cta,shared_cta_gap_seconds:2}}]);
+ await assert.rejects(bulk.start(id,cta,1.5),/shared_cta_changed/);
+ await assert.rejects(bulk.apply({cta_url:cta,cta_gap_seconds:1.5,apply_story:{id,preview:'old.mp3',updated_at:'same'}},{base_seconds:25}),/shared_cta_changed/);
 });

@@ -18,23 +18,24 @@ function memberCore(db,extra={}){
 }
 
 test('first payment report records once and notifies once; retry does not spam Telegram',async()=>{
- let reported=false,notifications=0,updates=0;
+ let reported=false,notifications=0,updates=0,notice;
+ const payer={id:baseId,name:'Энхжин',phone:'+97699112233'};
  const mock=memberCore(async(path,opts)=>{
   if(opts?.method==='PATCH'){
-   updates++;assert.match(path,/payment_reported_at=is\.null/);
+   updates++;assert.match(path,/payment_reported_at=is\.null/);assert.match(path,/membership_days/);
    if(reported)return [];
-   reported=true;return [{id:orderId,kind:'membership',amount:1000}];
+   reported=true;return [{id:orderId,member_id:baseId,kind:'membership',membership_days:7,amount:1000}];
   }
   assert.match(path,/member_id=eq\./);return [{status:'pending',payment_reported_at:'2026-11-04T00:00:00Z'}];
- });
- await withMocks({core:mock.core,telegram:{notifyPayment:async()=>notifications++}},async(handler)=>{
+ },{auth:async()=>payer});
+ await withMocks({core:mock.core,telegram:{notifyPayment:async payload=>{notifications++;notice=payload}}},async(handler)=>{
   const event={httpMethod:'POST',body:JSON.stringify({action:'report',id:orderId})};
   const first=await handler(event),second=await handler(event);
   assert.equal(first.statusCode,200);
   assert.equal(second.statusCode,200);
   assert.equal(JSON.parse(second.body).already_reported,true);
  });
- assert.equal(notifications,1);assert.equal(updates,2);
+ assert.equal(notifications,1);assert.equal(updates,2);assert.deepEqual(notice.member,payer);assert.equal(notice.order.membership_days,7);
  assert.equal(mock.calls.filter(row=>row[2]==='payment-report').length,2);
 });
 

@@ -29,3 +29,17 @@ export function audioPreviewIsStale({preview='',current,rendered={}}={}){
  if(str(rendered.previewUrl)&&!cropConfigurationMatches(rendered,current))return true;
  return false;
 }
+
+export function previewNeedsRender(state){
+ return !!str(state?.current?.reference)&&!!(str(state.current.ctaUrl)||str(state.preview))&&(!str(state.preview)||audioPreviewIsStale(state));
+}
+// A completed per-story render must not be hidden behind an older shared preview.
+export function resolvedPreviewUrl({preview='',renderedPreview='',sharedPreview=''}={}){
+ return str(preview)&&str(preview)===str(renderedPreview)?str(preview):str(sharedPreview)||str(preview);
+}
+
+export function previewResultComplete(configuration,duration){
+ if(!configuration)return false;
+ const length=seconds(configuration.end)-seconds(configuration.start),actual=seconds(duration);
+ return Number.isFinite(actual)&&Number.isFinite(length)&&length>=5&&actual>=length+(str(configuration.ctaUrl)?seconds(configuration.ctaGap)+.35:-.8);
+}

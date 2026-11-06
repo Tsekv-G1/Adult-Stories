@@ -1,3 +1,4 @@
+import {mergeSiteAudio} from './shared-audio.js';
 import {prepareUpscale} from './image-upscale.js?v=8.5.0';
 import {createLocalRepository} from './local-repository.js?v=8.5.0';
 import {importWithTimeout} from './loader-resilience.js?v=9.1.0';
@@ -75,14 +76,7 @@ export async function saveStory(story,body){
 export async function removeStory(id){if(!online){if(await repository.mutate('remove-story',{id}))return;let d=parseLocal();d.stories=d.stories.filter(s=>s.id!==id);d.bodies=d.bodies.filter(b=>b.story_id!==id);if(d.site.featured_story_id===id)d.site.featured_story_id=d.stories[0]?.id||null;updateLocal(d);return}let sb=await supa();let r=await sb.from('stories').delete().eq('id',id);if(r.error?.code==='23503')throw Error('Төлбөрийн захиалгатай өгүүллэгийг устгах боломжгүй. Төлөвийг Архив болгож хадгална уу.');if(r.error)throw r.error;alertChange()}
 // Merge shared audio independently of other editor panels and reject concurrent writes.
 export async function saveSite(content,{sharedKey}={}){
- const keys=['shared_preview_url','shared_cta_url'];
- if(sharedKey&&!keys.includes(sharedKey))throw Error('invalid_audio_setting');
- const merge=current=>{
-  if(sharedKey)return {...current,[sharedKey]:content[sharedKey]};
-  const next={...content};
-  for(const key of keys){if(current[key])next[key]=current[key];else delete next[key]}
-  return next;
- };
+ const merge=current=>mergeSiteAudio(current,content,sharedKey);
  if(!online){
   const d=await repository.read({admin:true}),next=merge(d.site);
   if(!await repository.mutate('save-site',{content:next}))updateLocal({...d,site:{...next,id:'main'}});

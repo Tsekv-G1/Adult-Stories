@@ -1,3 +1,4 @@
+import {resolvedPreviewUrl} from './audio-preview-state.js';
 import {priceOffer} from './price-offer.js';
 import {normalizeSearch,readDiscovery,discoveryUrl,readerFontSize} from './discovery.js';
 import {deliverImage,excerptText,optimizedImage} from './image-delivery.js?v=8.8.0';
@@ -24,7 +25,7 @@ const asset=id=>state.data?.assets.find(a=>a.id===id),story=id=>state.data?.stor
 function publicCatalog(data){
  const site={...defaults().site,...data.site};
  const shared=safeUrl(site.shared_preview_url);
- const stories=shared&&!isPrivateAudio(shared)?data.stories.map(row=>({...row,audio_preview_url:shared})):data.stories;
+ const stories=shared&&!isPrivateAudio(shared)?data.stories.map(row=>({...row,audio_preview_url:resolvedPreviewUrl({preview:row.audio_preview_url,renderedPreview:row.overlay?.audio_preview_rendered_url,sharedPreview:shared})})):data.stories;
  return {...data,site,stories};
 }
 const visible=()=>state.data.stories.filter(s=>isPublishedStory(s)).sort((a,b)=>Number(a.sort_order??100)-Number(b.sort_order??100));
